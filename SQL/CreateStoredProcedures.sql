@@ -12,11 +12,34 @@ BEGIN
 END
 GO
 
+DROP PROCEDURE IF EXISTS dbo.Get_LastEventDateWithData
+GO
+CREATE PROCEDURE dbo.Get_LastEventDateWithData
+AS
+BEGIN
+	-- TODO: Write procedure
+	SELECT '1900-01-01 00:00:00'
+END
+GO
+
+DROP PROCEDURE IF EXISTS dbo.Logging_Data
+GO
+CREATE PROCEDURE dbo.Logging_Data @HostName NVARCHAR(MAX), @Message NVARCHAR(MAX)
+AS
+BEGIN
+	INSERT INTO dbo.log_data(HostName, LogMessage)
+	VALUES (@HostName, @Message)
+END
+GO
+
 DROP PROCEDURE IF EXISTS dbo.Truncate_Schedule
 GO
 CREATE PROCEDURE dbo.Truncate_Schedule @ClearAll BIT
 AS
 BEGIN
+
+	-- TODO: Change to check for most recent race with data
+	-- Return number of deleted rows
 
 	SELECT id
 	INTO #Deletes
