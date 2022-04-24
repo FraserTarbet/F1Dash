@@ -99,33 +99,67 @@ GO
 CREATE PROCEDURE dbo.Get_TelemetryRowCounts @SessionId INT
 AS
 BEGIN
+
 	SELECT S.id AS SessionId
-		,COALESCE(COUNT(Lap.id), 0) AS Laps
-		,COALESCE(COUNT(Sector.id), 0) AS Sectors
-		,COALESCE(COUNT(SpeedTrap.id), 0) AS SpeedTraps
-		,COALESCE(COUNT(TimingData.id), 0) AS TimingData
-		,COALESCE(COUNT(CarData.SessionId), 0) AS CarData
+		,COALESCE(Lap.Records, 0) AS Laps
+		,COALESCE(Sector.Records, 0) AS Sectors
+		,COALESCE(SpeedTrap.Records, 0) AS SpeedTraps
+		,COALESCE(TimingData.Records, 0) AS TimingData
+		,COALESCE(CarData.Records, 0) AS CarData
+		,COALESCE(PositionData.Records, 0) AS PositionData
+		,COALESCE(TrackStatus.Records, 0) AS TrackStatus
+		,COALESCE(SessionStatus.Records, 0) AS SessionStatus
+		,COALESCE(DriverInfo.Records, 0) AS DriverInfo
+		,COALESCE(WeatherData.Records, 0) AS WeatherData
 
 	FROM dbo.Session AS S
 
-	LEFT JOIN dbo.Lap AS Lap
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.Lap WHERE SessionId = @SessionId GROUP BY SessionId) AS Lap
 	ON S.id = Lap.SessionId
 
-	LEFT JOIN dbo.Sector AS Sector
-	ON Lap.id = Sector.LapId
+	LEFT JOIN (
+		SELECT L.SessionId, COUNT(S.id) AS Records 
+		FROM dbo.Lap AS L
+		INNER JOIN dbo.Sector AS S
+		ON L.id = S.LapId
+		WHERE SessionId = @SessionId
+		GROUP BY L.SessionId
+	) AS Sector
+	ON S.id = Sector.SessionId
 
-	LEFT JOIN dbo.SpeedTrap AS SpeedTrap
-	ON Lap.id = SpeedTrap.LapId
+	LEFT JOIN (
+		SELECT L.SessionId, COUNT(T.id) AS Records 
+		FROM dbo.Lap AS L
+		INNER JOIN dbo.SpeedTrap AS T
+		ON L.id = T.LapId
+		WHERE SessionId = @SessionId
+		GROUP BY L.SessionId
+	) AS SpeedTrap
+	ON S.id = SpeedTrap.SessionId
 
-	LEFT JOIN dbo.TimingData AS TimingData
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.TimingData WHERE SessionId = @SessionId GROUP BY SessionId) AS TimingData
 	ON S.id = TimingData.SessionId
 
-	LEFT JOIN dbo.CarData AS CarData
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.CarData WHERE SessionId = @SessionId GROUP BY SessionId) AS CarData
 	ON S.id = CarData.SessionId
+
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.PositionData WHERE SessionId = @SessionId GROUP BY SessionId) AS PositionData
+	ON S.id = PositionData.SessionId
+
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.TrackStatus WHERE SessionId = @SessionId GROUP BY SessionId) AS TrackStatus
+	ON S.id = TrackStatus.SessionId
+
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.SessionStatus WHERE SessionId = @SessionId GROUP BY SessionId) AS SessionStatus
+	ON S.id = SessionStatus.SessionId
+
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.DriverInfo WHERE SessionId = @SessionId GROUP BY SessionId) AS DriverInfo
+	ON S.id = DriverInfo.SessionId
+
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.WeatherData WHERE SessionId = @SessionId GROUP BY SessionId) AS WeatherData
+	ON S.id = WeatherData.SessionId
 
 	WHERE S.id = @SessionId
 
-	GROUP BY S.id
 END
 GO
 
@@ -152,7 +186,24 @@ BEGIN
 
 	DELETE FROM dbo.CarData
 	WHERE SessionId = @SessionId
+
+	DELETE FROM dbo.PositionData
+	WHERE SessionId = @SessionId
+
+	DELETE FROM dbo.TrackStatus
+	WHERE SessionId = @SessionId
+
+	DELETE FROM dbo.SessionStatus
+	WHERE SessionId = @SessionId
+
+	DELETE FROM dbo.DriverInfo
+	WHERE SessionId = @SessionId
+
+	DELETE FROM dbo.WeatherData
+	WHERE SessionId = @SessionId
+
 END
+GO
 
 DROP PROCEDURE IF EXISTS dbo.Update_SessionLoadStatus
 GO
@@ -162,6 +213,7 @@ BEGIN
 	UPDATE dbo.Session
 	SET LoadStatus = @Status
 		,LoadStatusUpdatedDateTime = GETDATE()
+	WHERE id = @SessionId
 END
 GO
 

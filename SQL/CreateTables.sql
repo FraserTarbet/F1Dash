@@ -42,8 +42,8 @@ CREATE TABLE dbo.Session(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 	,LoadStatus BIT
 	,LoadStatusUpdatedDateTime DATETIME
-	,INDEX IndexEventId(EventId)
 )
+CREATE NONCLUSTERED INDEX IndexEventId ON dbo.Session (EventId)
 
 DROP TABLE IF EXISTS dbo.Lap
 CREATE TABLE dbo.Lap(
@@ -58,9 +58,9 @@ CREATE TABLE dbo.Lap(
 	,PitInTime FLOAT
 	,IsPersonalBest BIT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
-	,INDEX IndexSessionId(SessionId)
-	,INDEX IndexDriverIf(Driver)
 )
+CREATE NONCLUSTERED INDEX IndexSessionId ON dbo.Lap (SessionId)
+CREATE NONCLUSTERED INDEX IndexDriver ON dbo.Lap (Driver)
 
 DROP TABLE IF EXISTS dbo.Sector
 CREATE TABLE dbo.Sector(
@@ -70,8 +70,8 @@ CREATE TABLE dbo.Sector(
 	,SectorTime FLOAT
 	,SectorSessionTime FLOAT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
-	,INDEX IndexLapId(LapId)
 )
+CREATE NONCLUSTERED INDEX IndexLapId ON dbo.Sector (LapId)
 
 DROP TABLE IF EXISTS dbo.SpeedTrap
 CREATE TABLE dbo.SpeedTrap(
@@ -80,12 +80,12 @@ CREATE TABLE dbo.SpeedTrap(
 	,SpeedTrapPoint VARCHAR(2)
 	,Speed INT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
-	,INDEX IndexLapId(LapId)
 )
+CREATE NONCLUSTERED INDEX IndexLapId ON dbo.SpeedTrap (LapId)
 
 DROP TABLE IF EXISTS dbo.TimingData
 CREATE TABLE dbo.TimingData(
-	id INT IDENTITY(0, 1) PRIMARY KEY
+	id INT IDENTITY(0, 1)
 	,SessionId INT
 	,LapNumber INT
 	,Driver INT
@@ -101,8 +101,8 @@ CREATE TABLE dbo.TimingData(
 	,StartLaps FLOAT
 	,OutLap FLOAT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
-	,INDEX IndexSessionId(SessionId)
 )
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.TimingData (SessionId)
 
 DROP TABLE IF EXISTS dbo.CarData
 CREATE TABLE dbo.CarData(
@@ -119,4 +119,77 @@ CREATE TABLE dbo.CarData(
 	,[Source] VARCHAR(MAX)
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE CLUSTERED INDEX IndexEventIdDriver on dbo.CarData (SessionId, Driver)
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.CarData (SessionId)
+CREATE NONCLUSTERED INDEX IndexDriver ON dbo.CarData (Driver)
+
+
+DROP TABLE IF EXISTS dbo.PositionData
+CREATE TABLE dbo.PositionData(
+	SessionId INT
+	,Driver INT
+	,[Time] FLOAT
+	,[Date] DATETIME2(3)
+	,[Status] VARCHAR(MAX)
+	,X INT
+	,Y INT
+	,Z INT
+	,[Source] VARCHAR(MAX)
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.PositionData (SessionId)
+CREATE NONCLUSTERED INDEX IndexDriver ON dbo.PositionData (Driver)
+
+DROP TABLE IF EXISTS dbo.TrackStatus
+CREATE TABLE dbo.TrackStatus(
+	SessionId INT
+	,[Time] FLOAT
+	,[Status] INT
+	,[Message] VARCHAR(MAX)
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.TrackStatus (SessionId)
+
+DROP TABLE IF EXISTS dbo.SessionStatus
+CREATE TABLE dbo.SessionStatus(
+	SessionId INT
+	,[Time] FLOAT
+	,[Status] VARCHAR(MAX)
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.SessionStatus (SessionId)
+
+DROP TABLE IF EXISTS dbo.DriverInfo
+CREATE TABLE dbo.DriverInfo(
+	SessionId INT
+	,RacingNumber INT
+	,BroadcastName VARCHAR(MAX)
+	,FullName VARCHAR(MAX)
+	,Tla VARCHAR(3)
+	,Line INT
+	,TeamName VARCHAR(MAX)
+	,TeamColour VARCHAR(MAX)
+	,FirstName VARCHAR(MAX)
+	,LastName VARCHAR(MAX)
+	,Reference VARCHAR(MAX)
+	,HeadshotUrl NVARCHAR(MAX)
+	,CountryCode VARCHAR(3)
+	,NameFormat VARCHAR(MAX)
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.DriverInfo (SessionId)
+CREATE NONCLUSTERED INDEX IndexDriver ON dbo.DriverInfo (RacingNumber)
+
+DROP TABLE IF EXISTS dbo.WeatherData
+CREATE TABLE dbo.WeatherData(
+	SessionId INT
+	,[Time] FLOAT
+	,AirTemp FLOAT
+	,Humidity FLOAT
+	,Pressure FLOAT
+	,Rainfall BIT
+	,TrackTemp FLOAT
+	,WindDirection INT
+	,WindSpeed FLOAT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexSessionId ON dbo.WeatherData (SessionId)

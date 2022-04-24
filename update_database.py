@@ -3,9 +3,6 @@ import pandas as pd
 import numpy as np
 import datetime
 import os
-from requests import session
-
-import sqlalchemy
 import sql_connection
 
 pd.options.mode.chained_assignment = None
@@ -126,6 +123,35 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
             data_logging(pyodbc_connection, f"Car data unavailable: {session['api_string']}")
             continue
 
+        try:
+            position_data = ff.api.position_data(session["api_string"])
+        except ff.api.SessionNotAvailableError:
+            data_logging(pyodbc_connection, f"Position data unavailable: {session['api_string']}")
+            continue
+
+        try:
+            track_status = ff.api.track_status_data(session["api_string"])
+        except ff.api.SessionNotAvailableError:
+            data_logging(pyodbc_connection, f"Track status data unavailable: {session['api_string']}")
+            continue
+
+        try:
+            session_status = ff.api.session_status_data(session["api_string"])
+        except ff.api.SessionNotAvailableError:
+            data_logging(pyodbc_connection, f"Session status data unavailable: {session['api_string']}")
+            continue
+
+        try:
+            driver_info = ff.api.driver_info(session["api_string"])
+        except ff.api.SessionNotAvailableError:
+            data_logging(pyodbc_connection, f"Session driver info unavailable: {session['api_string']}")
+            continue
+
+        try:
+            weather_data = ff.api.weather_data(session["api_string"])
+        except ff.api.SessionNotAvailableError:
+            data_logging(pyodbc_connection, f"Session weather data unavailable: {session['api_string']}")
+            continue
 
         cursor = pyodbc_connection["cursor"]
         new_lapId = cursor.execute("SET NOCOUNT ON; EXEC dbo.Get_MaxId @TableName=?", "dbo.Lap").fetchval() + 1
@@ -139,7 +165,7 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
 
             new_lapId += 1
 
-        laps = lap_data[["id", "SessionId", "Time", "Driver", "LapTime", "NumberOfLaps", "NumberOfPitStops", "PitOutTime", "PitInTime", "IsPersonalBest"]]
+        laps = lap_data[["id", "SessionId", "Time", "Driver", "LapTime", "NumberOfLaps", "NumberOfPitStops", "PitOutTime", "PitInTime", "IsPersonalBest"]][(lap_data["Driver"] != "")]
 
         # Sector
         sector_frames = []
@@ -179,17 +205,55 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
         car_data["SessionId"] = session["SessionId"]
         car_data.rename(columns={"nGear": "Gear"}, inplace=True)
 
+        # Position data
+        position_frames = []
+        for driver in position_data:
+            position_frame = position_data[driver]
+            position_frame.drop(["index"], axis=1, errors="ignore", inplace=True)
+            position_frame["Driver"] = driver
+            position_frames.append(position_frame)
+
+        position_data = pd.concat(position_frames)
+        position_data["SessionId"] = session["SessionId"]
+
+        # Track status
+        track_status = pd.DataFrame(track_status)
+        track_status["SessionId"] = session["SessionId"]
+
+        # Session status
+        session_status = pd.DataFrame(session_status)
+        session_status["SessionId"] = session["SessionId"]
+
+        # Driver info
+        driver_frames = []
+        i = 0
+        for driver in driver_info:
+            driver_frame = pd.DataFrame(driver_info[driver], index=[i])
+            driver_frames.append(driver_frame)
+            i += 1
+
+        driver_info = pd.concat(driver_frames)
+        driver_info["SessionId"] = session["SessionId"]
+
+        # Weather data
+        weather_data = pd.DataFrame(weather_data)
+        weather_data["SessionId"] = session["SessionId"]
+
 
         # Compare row counts to SQL
         existing_counts = pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_TelemetryRowCounts @SessionId = {session['SessionId']}", sqlalchemy_engine)
-        existing_total =  existing_counts["Laps"][0] + existing_counts["Sectors"][0] + existing_counts["SpeedTraps"][0] + existing_counts["TimingData"][0] + existing_counts["CarData"][0]
-        new_total = len(laps) + len(sectors) + len(speed_traps) + len(timing_data) + len(car_data)
+        existing_total =  existing_counts["Laps"][0] + existing_counts["Sectors"][0] + existing_counts["SpeedTraps"][0] \
+            + existing_counts["TimingData"][0] + existing_counts["CarData"][0] + existing_counts["PositionData"][0] \
+            + existing_counts["TrackStatus"][0] + existing_counts["SessionStatus"][0] + existing_counts["DriverInfo"][0] \
+            + existing_counts["WeatherData"][0]
+        new_total = len(laps) + len(sectors) + len(speed_traps) + len(timing_data) + len(car_data) + len(position_data) \
+            + len(track_status) + len(session_status) + len(driver_info) + len(weather_data)
 
         if new_total <= existing_total and force_reload == False:
             # Data already fully loaded
             cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 1)
             cursor.commit()
-            data_logging(pyodbc_connection, f"Confirmed data load complete for {session['SessionId']}")
+            data_logging(pyodbc_connection, f"Confirmed data load complete for SessionId {session['SessionId']}")
         else:
             # Load /reload data
             cursor.execute("EXEC dbo.Delete_Telemetry @SessionId=?", int(session["SessionId"]))
@@ -199,7 +263,12 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
                 (sectors, "Sector"),
                 (speed_traps, "SpeedTrap"),
                 (timing_data, "TimingData"),
-                (car_data, "CarData")
+                (car_data, "CarData"),
+                (position_data, "PositionData"),
+                (track_status, "TrackStatus"),
+                (session_status, "SessionStatus"),
+                (driver_info, "DriverInfo"),
+                (weather_data, "WeatherData")
             ]:
                 data_logging(pyodbc_connection, f"Loading {len(dataset[0])} records to {dataset[1]}")
                 dataset[0].to_sql(dataset[1], sqlalchemy_engine, if_exists="append", index=False)
@@ -208,15 +277,14 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
 
             cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 0)
             cursor.commit()
-            data_logging(pyodbc_connection, f"Data load at least partially complete for {session['SessionId']}")
+            data_logging(pyodbc_connection, f"Data load at least partially complete for SessionId {session['SessionId']}")
         
-
-
 
 if __name__ == "__main__":
     pyodbc_connection = sql_connection.get_pyodbc_connection()
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
     ff.Cache.enable_cache("./ffcache")
+    ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    load_session_data(3, 10, True)
+    load_session_data(3, 11, False)
     ff.Cache.clear_cache("./ffcache")
