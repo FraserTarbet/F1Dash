@@ -227,5 +227,11 @@ BEGIN
 	UPDATE dbo.Lap SET PitOutTime = NULL WHERE PitOutTime < 0 AND SessionId = @SessionId
 	UPDATE dbo.Lap SET PitInTime = NULL WHERE PitInTime < 0 AND SessionId = @SessionId
 
+	UPDATE dbo.CarData SET [Time] = NULL WHERE [Time] < 0 AND SessionId = @SessionId
+	UPDATE dbo.PositionData SET [Time] = NULL WHERE [Time] < 0 AND SessionId = @SessionId
+
+	UPDATE dbo.TimingData SET [LapTime] = NULL WHERE [LapTime] < 0 AND SessionId = @SessionId
+	UPDATE dbo.TimingData SET [Time] = NULL WHERE [Time] < 0 AND SessionId = @SessionId
+
 END
 GO

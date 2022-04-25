@@ -181,7 +181,8 @@ CREATE NONCLUSTERED INDEX IndexDriver ON dbo.DriverInfo (RacingNumber)
 
 DROP TABLE IF EXISTS dbo.WeatherData
 CREATE TABLE dbo.WeatherData(
-	SessionId INT
+	id INT IDENTITY(0, 1)
+	,SessionId INT
 	,[Time] FLOAT
 	,AirTemp FLOAT
 	,Humidity FLOAT
@@ -192,4 +193,57 @@ CREATE TABLE dbo.WeatherData(
 	,WindSpeed FLOAT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE CLUSTERED INDEX IndexSessionId ON dbo.WeatherData (SessionId)
+CREATE CLUSTERED INDEX IndexSessionIdId ON dbo.WeatherData (SessionId, Id)
+
+
+DROP TABLE IF EXISTS dbo.MergedTelemetry
+CREATE TABLE dbo.MergedTelemetry(
+	SessionId INT
+	,Driver INT
+	,LapId INT
+	,TrackFeatureId INT
+	,InPits BIT
+	,[Time] FLOAT
+	,TimeSinceLastSample FLOAT
+	,[Source] VARCHAR(MAX)
+	,[Status] VARCHAR(MAX)
+	,X INT
+	,Y INT
+	,Z INT
+	,RPM INT
+	,Speed INT
+	,Gear INT
+	,Throttle INT
+	,Brake BIT
+	,DRS INT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexLapId ON dbo.MergedTelemetry (LapId)
+
+
+DROP TABLE IF EXISTS dbo.MergedLapData
+CREATE TABLE dbo.MergedLapData(
+	SessionId INT
+	,Driver INT
+	,LapId INT
+	,TimeStart FLOAT
+	,TimeEnd FLOAT
+	,PitOutTime FLOAT
+	,PitInTime FLOAT
+	,LapTime FLOAT
+	,NumberOfLaps INT
+	,LapsInStint INT
+	,IsPersonalBest BIT
+	,Compound VARCHAR(MAX)
+	,TyreAge INT
+	,TrackStatus VARCHAR(MAX)
+	,CleanLap BIT
+	,WeatherId INT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexLapId ON dbo.MergedLapData (LapId)
+CREATE NONCLUSTERED INDEX IndexWeatherId ON dbo.MergedLapData (WeatherId)
+CREATE NONCLUSTERED INDEX IndexSessionIdDriverTimeStartTimeEnd ON dbo.MergedLapData (SessionId, Driver, TimeStart, TimeEnd)
+
+
+-- Pits?
