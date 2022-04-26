@@ -13,15 +13,14 @@ def data_logging(pyodbc_connection, message):
     cursor = pyodbc_connection["cursor"]
     cursor.execute("EXEC dbo.Logging_Data @HostName=?, @Message=?", host_name, message)
     cursor.commit()
+    print("data_logging: " + message)
 
 
 def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False):
     # Refreshes future event data only - rounds with existing data are not touched
     data_logging(pyodbc_connection, "Starting schedule refresh")
     current_year = datetime.datetime.now().year
-    current_date = datetime.datetime.now()
-    
-    years = list(range(2018, current_year + 1)) if reload_history else [current_year]
+    years = list(range(2018, current_year + 1))
 
     schedules_to_concat = []
     for year in years:
@@ -72,12 +71,12 @@ def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False)
     sessions.to_sql("Session", sqlalchemy_engine, if_exists="append", index=False)
 
 
-def load_session_data(force_eventId=None, force_sessionId=None, force_reload=False): 
+def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None, force_reload=False): 
     # Get API strings
     if force_eventId is not None:
-        sql = f"EXEC dbo.Get_SessionsToUpdate @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
+        sql = f"EXEC dbo.Get_SessionsToLoad @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
     else:
-        sql = "EXEC dbo.Get_SessionsToUpdate;"
+        sql = "EXEC dbo.Get_SessionsToLoad;"
 
     sessions_frame = pd.read_sql_query("SET NOCOUNT ON; " + sql, sqlalchemy_engine)
 
@@ -250,7 +249,7 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
             + len(track_status) + len(session_status) + len(driver_info) + len(weather_data)
 
         if new_total <= existing_total and force_reload == False:
-            # Data already fully loaded
+            # Data already fully loaded, update flag
             cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 1)
             cursor.commit()
             data_logging(pyodbc_connection, f"Confirmed data load complete for SessionId {session['SessionId']}")
@@ -278,7 +277,65 @@ def load_session_data(force_eventId=None, force_sessionId=None, force_reload=Fal
             cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 0)
             cursor.commit()
             data_logging(pyodbc_connection, f"Data load at least partially complete for SessionId {session['SessionId']}")
-        
+
+
+def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None):
+    # Transforms all take place using stored procedures, this script just calls and passes parameters to each
+    cursor = pyodbc_connection["cursor"]
+
+    if force_eventId is not None:
+        sql = f"EXEC dbo.Get_SessionsToTransform @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
+    else:
+        sql = "EXEC dbo.Get_SessionsToTransform"
+
+    sessions_frame = pd.read_sql_query("SET NOCOUNT ON; " + sql, sqlalchemy_engine)[["SessionId", "EventId"]]
+    session_dicts = []
+    for i in range(0, len(sessions_frame)):
+        session_dicts.append({
+            "SessionId": sessions_frame["SessionId"].iloc[i],
+            "EventId": sessions_frame["EventId"].iloc[0]
+        })
+
+    if len(session_dicts) > 0:
+        data_logging(pyodbc_connection, f"Running transforms for {len(session_dicts)} sessions...")
+
+    for iSession, session_dict in enumerate(session_dicts):
+        sessionId = session_dict["SessionId"]
+        eventId = session_dict["EventId"]
+        data_logging(pyodbc_connection, f"Running transforms for sessionId {sessionId}")
+
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 0)
+
+        drivers = list(pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_SessionDrivers @SessionId = {sessionId}", sqlalchemy_engine)["RacingNumber"])
+
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_LapData @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Merge_LapData for sessionId {sessionId}")
+
+        data_logging(pyodbc_connection, f"Starting Merge_Telemetry for drivers in SessionId {sessionId}")
+        for i, driver in enumerate(drivers):
+            cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Telemetry @SessionId=?, @Driver=?", int(sessionId), int(driver))
+            data_logging(pyodbc_connection, f"Ran Merge_Telemetry for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
+
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_TrackMap @EventId=?", int(eventId))
+        data_logging(pyodbc_connection, f"Ran Merge_TrackMap for SessionId {sessionId}")
+
+        data_logging(pyodbc_connection, f"Starting Update_TelemetryTrackMapping for SessionId {sessionId}")
+        for i, driver in enumerate(drivers):
+            cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_TelemetryTrackMapping @SessionId=?, @Driver=?", int(sessionId), int(driver))
+            data_logging(pyodbc_connection, f"Ran Update_TelemetryTrackMapping for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
+
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
+        data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
+
+
+def wrapper(force_eventId=None, force_sessionId=None, force_reload=False):
+    # Wraps together the refresh/load/transform functions
+    pyodbc_connection = sql_connection.get_pyodbc_connection()
+    sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
+    refresh_schedule(pyodbc_connection, sqlalchemy_engine)
+    load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId, force_reload)
+    run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId)
+
 
 if __name__ == "__main__":
     pyodbc_connection = sql_connection.get_pyodbc_connection()
@@ -286,5 +343,10 @@ if __name__ == "__main__":
     ff.Cache.enable_cache("./ffcache")
     ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    load_session_data(3, 11, False)
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 3, 11, False)
+    # run_transforms(pyodbc_connection, sqlalchemy_engine)
+    wrapper()
+
+
     ff.Cache.clear_cache("./ffcache")
+

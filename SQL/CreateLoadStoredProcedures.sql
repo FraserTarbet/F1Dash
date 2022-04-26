@@ -17,14 +17,39 @@ GO
 CREATE PROCEDURE dbo.Get_LastEventDateWithData
 AS
 BEGIN
-	-- TODO: Write procedure
-	SELECT '1900-01-01 00:00:00'
+	
+	-- Note: Event dates seem to be arbitrary, don't match to session dates
+
+	DECLARE @MaxCompletedSessionDate DATETIME
+		,@DeleteFromDate DATETIME
+
+	SET @MaxCompletedSessionDate = (
+		SELECT MAX(SessionDate)
+		FROM dbo.Session
+		WHERE LoadStatus IS NOT NULL
+	)
+
+	IF @MaxCompletedSessionDate IS NULL
+
+		SELECT '1900-01-01 00:00:00';
+
+	ELSE 
+
+		SELECT E.EventDate
+
+		FROM dbo.Event AS E
+
+		INNER JOIN dbo.Session AS S
+		ON E.id = S.EventId
+
+		WHERE S.SessionDate = @MaxCompletedSessionDate;
+
 END
 GO
 
-DROP PROCEDURE IF EXISTS dbo.Get_SessionsToUpdate
+DROP PROCEDURE IF EXISTS dbo.Get_SessionsToLoad
 GO
-CREATE PROCEDURE dbo.Get_SessionsToUpdate @ForceEventId INT = NULL, @ForceSessionId INT = NULL
+CREATE PROCEDURE dbo.Get_SessionsToLoad @ForceEventId INT = NULL, @ForceSessionId INT = NULL
 AS
 BEGIN
 	
@@ -56,6 +81,41 @@ BEGIN
 END
 GO
 
+
+DROP PROCEDURE IF EXISTS dbo.Get_SessionsToTransform
+GO
+CREATE PROCEDURE dbo.Get_SessionsToTransform @ForceEventId INT = NULL, @ForceSessionId INT = NULL
+AS
+BEGIN
+	SELECT S.id AS SessionId
+		,EventId
+		,EventName
+		,EventDate
+		,SessionName
+		,SessionDate
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.Event AS E
+	ON S.EventId = E.id
+
+	WHERE (
+		@ForceEventId IS NULL
+		AND @ForceSessionId IS NULL
+		AND SessionDate < GETDATE()
+		AND TransformStatus IS NULL -- Won't try to run on previously failed loads (0)
+		AND LoadStatus = 1 -- Only transform once session is fully loaded
+		AND F1ApiSupport = 1
+	)
+	OR (
+		E.id = @ForceEventId
+		AND S.id = @ForceSessionId
+		AND F1ApiSupport = 1
+	)
+END
+GO
+
+
 DROP PROCEDURE IF EXISTS dbo.Logging_Data
 GO
 CREATE PROCEDURE dbo.Logging_Data @HostName NVARCHAR(MAX), @Message NVARCHAR(MAX)
@@ -66,33 +126,53 @@ BEGIN
 END
 GO
 
+
 DROP PROCEDURE IF EXISTS dbo.Truncate_Schedule
 GO
 CREATE PROCEDURE dbo.Truncate_Schedule @ClearAll BIT
 AS
 BEGIN
 
-	-- TODO: Change to check for most recent race with data
-	-- Return number of deleted rows
+	-- Check for most recent EVENT with data for any session
+	-- i.e. Once an event starts receiving data, the schedule is crystalised
 
-	SELECT id
-	INTO #Deletes
-	FROM dbo.Event
-	WHERE EventDate > GETDATE()
+	DECLARE @MaxCompletedSessionDate DATETIME
+		,@DeleteFromDate DATETIME
+
+	SET @MaxCompletedSessionDate = (
+		SELECT MAX(SessionDate)
+		FROM dbo.Session
+		WHERE LoadStatus IS NOT NULL
+	)
+
+	SET @DeleteFromDate = (
+		SELECT MAX(SessionDate)
+		FROM dbo.Session AS E
+		INNER JOIN (
+			SELECT EventId
+			FROM dbo.Session
+			WHERE SessionDate = @MaxCompletedSessionDate
+		) AS S
+		ON E.EventId = S.EventId
+	)
+
+	DELETE E
+	FROM dbo.Event AS E
+	INNER JOIN dbo.Session AS S
+	ON E.id = S.EventId
+	WHERE S.SessionDate > @DeleteFromDate
+	OR @DeleteFromDate IS NULL
 	OR @ClearAll = 1
-
-	DELETE 
-	FROM dbo.Event
-	WHERE id IN (SELECT id FROM #Deletes)
 
 	DELETE
 	FROM dbo.Session
-	WHERE EventId in (SELECT id FROM #Deletes)
-
-	DROP TABLE #Deletes
+	WHERE SessionDate > @DeleteFromDate
+	OR @DeleteFromDate IS NULL
+	OR @ClearAll = 1
 
 END
 GO
+
 
 DROP PROCEDURE IF EXISTS dbo.Get_TelemetryRowCounts
 GO
@@ -217,6 +297,20 @@ BEGIN
 END
 GO
 
+
+DROP PROCEDURE IF EXISTS dbo.Update_SessionTransformStatus
+GO
+CREATE PROCEDURE dbo.Update_SessionTransformStatus @SessionId INT, @Status BIT
+AS
+BEGIN
+	UPDATE dbo.Session
+	SET TransformStatus = @Status
+		,TransformStatusUpdatedDateTime = GETDATE()
+	WHERE id = @SessionId
+END
+GO
+
+
 DROP PROCEDURE IF EXISTS dbo.Update_SetNullTimes
 GO
 CREATE PROCEDURE dbo.Update_SetNullTimes @SessionId INT
@@ -233,5 +327,19 @@ BEGIN
 	UPDATE dbo.TimingData SET [LapTime] = NULL WHERE [LapTime] < 0 AND SessionId = @SessionId
 	UPDATE dbo.TimingData SET [Time] = NULL WHERE [Time] < 0 AND SessionId = @SessionId
 
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Get_SessionDrivers
+GO
+CREATE PROCEDURE dbo.Get_SessionDrivers @SessionId INT
+AS
+BEGIN
+	SELECT RacingNumber
+
+	FROM dbo.DriverInfo
+
+	WHERE SessionId = @SessionId
 END
 GO

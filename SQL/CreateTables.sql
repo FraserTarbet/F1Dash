@@ -42,6 +42,8 @@ CREATE TABLE dbo.Session(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 	,LoadStatus BIT
 	,LoadStatusUpdatedDateTime DATETIME
+	,TransformStatus BIT
+	,TransformStatusUpdatedDateTime DATETIME
 )
 CREATE NONCLUSTERED INDEX IndexEventId ON dbo.Session (EventId)
 
@@ -198,10 +200,13 @@ CREATE CLUSTERED INDEX IndexSessionIdId ON dbo.WeatherData (SessionId, Id)
 
 DROP TABLE IF EXISTS dbo.MergedTelemetry
 CREATE TABLE dbo.MergedTelemetry(
-	SessionId INT
+	id INT IDENTITY(0, 1) PRIMARY KEY
+	,SessionId INT
 	,Driver INT
 	,LapId INT
-	,TrackFeatureId INT
+	,SectorNumber INT
+	,ZoneNumber INT
+	,ZoneInputCategory INT
 	,InPits BIT
 	,[Time] FLOAT
 	,TimeSinceLastSample FLOAT
@@ -218,7 +223,7 @@ CREATE TABLE dbo.MergedTelemetry(
 	,DRS INT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE CLUSTERED INDEX IndexLapId ON dbo.MergedTelemetry (LapId)
+CREATE NONCLUSTERED INDEX IndexLapId ON dbo.MergedTelemetry (LapId)
 
 
 DROP TABLE IF EXISTS dbo.MergedLapData
@@ -246,4 +251,16 @@ CREATE NONCLUSTERED INDEX IndexWeatherId ON dbo.MergedLapData (WeatherId)
 CREATE NONCLUSTERED INDEX IndexSessionIdDriverTimeStartTimeEnd ON dbo.MergedLapData (SessionId, Driver, TimeStart, TimeEnd)
 
 
--- Pits?
+DROP TABLE IF EXISTS dbo.TrackMap
+CREATE TABLE dbo.TrackMap(
+	EventId INT
+	,X INT
+	,Y INT
+	,Z INT
+	,SectorNumber INT
+	,ZoneNumber INT
+	,ZoneInputCategory INT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexXY ON dbo.TrackMap (X, Y)
+CREATE NONCLUSTERED INDEX IndexEventId ON dbo.TrackMap (EventId)
