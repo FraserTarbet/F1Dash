@@ -33,7 +33,7 @@ def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False)
     cursor.commit()
 
     last_event_date_with_data = cursor.execute("SET NOCOUNT ON; EXEC dbo.Get_LastEventDateWithData").fetchval()
-    schedule = schedule[(schedule["EventDate"] >= last_event_date_with_data)].reset_index(drop=True)
+    schedule = schedule[(schedule["EventDate"] > last_event_date_with_data)].reset_index(drop=True)
     schedule["id"] = 0
 
     new_event_id = cursor.execute("SET NOCOUNT ON; EXEC dbo.Get_MaxId @TableName=?", "dbo.Event").fetchval() + 1
@@ -343,9 +343,9 @@ if __name__ == "__main__":
     ff.Cache.enable_cache("./ffcache")
     ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    # load_session_data(pyodbc_connection, sqlalchemy_engine, 3, 11, False)
-    # run_transforms(pyodbc_connection, sqlalchemy_engine)
-    wrapper()
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 551, False)
+    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 551)
+    # wrapper()
 
 
     ff.Cache.clear_cache("./ffcache")

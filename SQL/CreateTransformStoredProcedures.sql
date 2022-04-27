@@ -461,7 +461,68 @@ BEGIN
 	FROM #InsertRecords
 
 
-	DROP TABLE #Car, #Pos, #Times, #SampleMatching, #InsertRecords
+	-- Update NearestNonSourceId (running after insert in order to use incremental PK)
+
+	;WITH A AS (
+		SELECT id
+			,[Source]
+			,[Time]
+			,ROW_NUMBER() OVER(ORDER BY [Time] ASC) AS RN
+
+		FROM dbo.MergedTelemetry
+
+		WHERE SessionId = @SessionId
+		AND Driver = @Driver
+	)
+	,B AS (
+		SELECT *
+			,CASE
+				WHEN LAG([Source], 1, '') OVER(ORDER BY RN ASC) <> [Source] THEN RN
+				ELSE NULL
+			END AS GroupStart
+		FROM A
+	)
+	,C AS (
+		SELECT *
+			,MAX(GroupStart) OVER(ORDER BY RN ASC) AS GroupNumber
+		FROM B
+	)
+	,D AS (
+		SELECT *
+			,COUNT(RN) OVER(PARTITION BY GroupNumber) AS GroupSize
+			,COUNT(RN) OVER(PARTITION BY GroupNumber ORDER BY RN ASC) AS GroupSeq
+		FROM C
+	)
+	,E AS (
+		SELECT *
+			,[Time] - LAG([Time], GroupSeq, NULL) OVER(ORDER BY RN ASC) AS TimeToPre
+			,LEAD([Time], GroupSize - GroupSeq + 1, NULL) OVER(ORDER BY RN ASC) - [Time] AS TimeToPost
+
+		FROM D
+	)
+	SELECT id
+		,CASE
+			WHEN TimeToPre < TimeToPost OR TimeToPost IS NULL THEN LAG(id, GroupSeq) OVER(ORDER BY RN ASC)
+			WHEN TimeToPre > TimeToPost OR TimeToPre IS NULL THEN LEAD(id, GroupSize - GroupSeq + 1, NULL) OVER(ORDER BY RN ASC)
+		END AS NearestNonSourceId
+
+	INTO #NearestNonSourceId
+
+	FROM E
+
+
+	UPDATE T
+
+	SET T.NearestNonSourceId = I.NearestNonSourceId	
+	
+	FROM dbo.MergedTelemetry AS T
+
+	INNER JOIN #NearestNonSourceId AS I
+	ON T.id = I.id
+
+
+
+	DROP TABLE #Car, #Pos, #Times, #SampleMatching, #InsertRecords, #NearestNonSourceId
 
 END
 GO

@@ -204,6 +204,7 @@ CREATE TABLE dbo.MergedTelemetry(
 	,SessionId INT
 	,Driver INT
 	,LapId INT
+	,NearestNonSourceId INT
 	,SectorNumber INT
 	,ZoneNumber INT
 	,ZoneInputCategory INT
