@@ -238,6 +238,7 @@ CREATE TABLE dbo.MergedLapData(
 	,PitInTime FLOAT
 	,LapTime FLOAT
 	,NumberOfLaps INT
+	,StintNumber INT
 	,LapsInStint INT
 	,IsPersonalBest BIT
 	,Compound VARCHAR(MAX)

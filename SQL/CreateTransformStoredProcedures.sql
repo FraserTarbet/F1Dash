@@ -47,105 +47,111 @@ BEGIN
 		,TrackStatus
 		,CleanLap
 		,WeatherId
+		,StintNumber
 	)
-	SELECT SessionId
-		,Driver
-		,Lap.LapId
-		,TimeStart
-		,TimeEnd
-		,PitOutTime
-		,PitInTime
-		,LapTime
-		,NumberOfLaps
-		,COUNT(Lap.LapId) OVER(PARTITION BY Driver, CompId ORDER BY NumberOfLaps ASC) AS LapsInStint
-		,IsPersonalBest
-		,Compound
-		,COUNT(Lap.LapId) OVER(PARTITION BY Driver, CompId ORDER BY NumberOfLaps ASC) + TyreAgeWhenFitted AS TyreAge
-		,TrackStatus
-		,CASE
-			WHEN TrackStatus <> 'AllClear' THEN 0
-			WHEN LapTime > @CleanLapTimeThreshold THEN 0
-			WHEN COALESCE(PitOutTime, PitInTime) IS NOT NULL THEN 0
-			ELSE 1
-		END AS CleanLap
-		,WeatherId
+	SELECT *
+		,SUM(CASE WHEN LapsInStint = 1 THEN 1 ELSE 0 END) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC) AS StintNumber
 
 	FROM (
 
-		SELECT L.*
-			,ROW_NUMBER() OVER(PARTITION BY L.Driver, L.LapId ORDER BY Compound.[Time] DESC) AS RNCompound
-			,Compound.Compound
-			,Compound.TyreAgeWhenFitted
-			,Compound.id AS CompId
-			,Track.TrackStatus
+		SELECT SessionId
+			,Driver
+			,Lap.LapId
+			,TimeStart
+			,TimeEnd
+			,PitOutTime
+			,PitInTime
+			,LapTime
+			,NumberOfLaps
+			,COUNT(Lap.LapId) OVER(PARTITION BY Driver, CompId ORDER BY NumberOfLaps ASC) AS LapsInStint
+			,IsPersonalBest
+			,Compound
+			,COUNT(Lap.LapId) OVER(PARTITION BY Driver, CompId ORDER BY NumberOfLaps ASC) + TyreAgeWhenFitted AS TyreAge
+			,TrackStatus
+			,CASE
+				WHEN TrackStatus <> 'AllClear' THEN 0
+				WHEN LapTime > @CleanLapTimeThreshold THEN 0
+				WHEN COALESCE(PitOutTime, PitInTime) IS NOT NULL THEN 0
+				ELSE 1
+			END AS CleanLap
+			,WeatherId
 
 		FROM (
 
-			SELECT L.SessionId
-				,L.Driver
-				,L.id AS LapId
-				,COALESCE(
-					LAG(L.[Time]) OVER(PARTITION BY L.Driver ORDER BY L.[Time] ASC)
+			SELECT L.*
+				,ROW_NUMBER() OVER(PARTITION BY L.Driver, L.LapId ORDER BY Compound.[Time] DESC) AS RNCompound
+				,Compound.Compound
+				,Compound.TyreAgeWhenFitted
+				,Compound.id AS CompId
+				,Track.TrackStatus
+
+			FROM (
+
+				SELECT L.SessionId
+					,L.Driver
+					,L.id AS LapId
+					,COALESCE(
+						LAG(L.[Time]) OVER(PARTITION BY L.Driver ORDER BY L.[Time] ASC)
+						,L.PitOutTime
+					) AS TimeStart
+					,L.[Time] AS TimeEnd
 					,L.PitOutTime
-				) AS TimeStart
-				,L.[Time] AS TimeEnd
-				,L.PitOutTime
-				,L.PitInTime
-				,L.LapTime
-				,L.NumberOfLaps
-				,L.IsPersonalBest
+					,L.PitInTime
+					,L.LapTime
+					,L.NumberOfLaps
+					,L.IsPersonalBest
+
+				FROM dbo.Lap AS L
+
+				WHERE L.SessionId = @SessionId
+
+			) AS L
+
+			LEFT JOIN (
+				SELECT Driver
+					,[Time]
+					,Compound
+					,COALESCE(TotalLaps, 0) AS TyreAgeWhenFitted
+					,id
+				FROM dbo.TimingData
+				WHERE Compound IS NOT NULL
+				AND SessionId = @SessionId
+			) AS Compound
+			ON L.Driver = Compound.Driver
+			AND L.TimeEnd >= Compound.[Time]
+
+			LEFT JOIN (
+				SELECT [Time] AS TimeStart
+					,LEAD([Time]) OVER(PARTITION BY SessionId ORDER BY [Time] ASC) AS TimeEnd
+					,[Status]
+					,[Message] AS TrackStatus
+				FROM dbo.TrackStatus
+				WHERE SessionId = @SessionId
+			) AS Track
+			ON (L.TimeStart <= Track.TimeEnd OR Track.TimeEnd IS NULL)
+			AND L.TimeEnd > Track.TimeStart
+
+		) AS Lap
+
+		LEFT JOIN (
+			SELECT L.id AS LapId
+				,W.id AS WeatherId
+				,ROW_NUMBER() OVER(PARTITION BY L.id ORDER BY W.[Time] DESC) AS RNWeather
 
 			FROM dbo.Lap AS L
 
+			LEFT JOIN dbo.WeatherData AS W
+			ON L.[Time] >= W.[Time]
+
 			WHERE L.SessionId = @SessionId
+			AND W.SessionId = @SessionId
+		) AS Weather
+		ON Lap.LapId = Weather.LapId
+		AND Weather.RNWeather = 1
 
-		) AS L
+		WHERE RNCompound = 1
 
-		LEFT JOIN (
-			SELECT Driver
-				,[Time]
-				,Compound
-				,COALESCE(TotalLaps, 0) AS TyreAgeWhenFitted
-				,id
-			FROM dbo.TimingData
-			WHERE Compound IS NOT NULL
-			AND SessionId = @SessionId
-		) AS Compound
-		ON L.Driver = Compound.Driver
-		AND L.TimeEnd >= Compound.[Time]
-
-		LEFT JOIN (
-			SELECT [Time] AS TimeStart
-				,LEAD([Time]) OVER(PARTITION BY SessionId ORDER BY [Time] ASC) AS TimeEnd
-				,[Status]
-				,[Message] AS TrackStatus
-			FROM dbo.TrackStatus
-			WHERE SessionId = @SessionId
-		) AS Track
-		ON (L.TimeStart <= Track.TimeEnd OR Track.TimeEnd IS NULL)
-		AND L.TimeEnd > Track.TimeStart
-
-	) AS Lap
-
-	LEFT JOIN (
-		SELECT L.id AS LapId
-			,W.id AS WeatherId
-			,ROW_NUMBER() OVER(PARTITION BY L.id ORDER BY W.[Time] DESC) AS RNWeather
-
-		FROM dbo.Lap AS L
-
-		LEFT JOIN dbo.WeatherData AS W
-		ON L.[Time] >= W.[Time]
-
-		WHERE L.SessionId = @SessionId
-		AND W.SessionId = @SessionId
-	) AS Weather
-	ON Lap.LapId = Weather.LapId
-	AND Weather.RNWeather = 1
-
-	WHERE RNCompound = 1
-
-	ORDER BY TimeStart ASC
+	) AS A
 
 END
 GO
