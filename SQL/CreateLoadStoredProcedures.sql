@@ -343,3 +343,46 @@ BEGIN
 	WHERE SessionId = @SessionId
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Update_SetDriverTeamOrders
+GO
+CREATE PROCEDURE dbo.Update_SetDriverTeamOrders @SessionId INT
+AS
+BEGIN
+
+	UPDATE D
+
+	SET D.DriverOrder = O.DriverOrder
+		,D.TeamOrder = O.TeamOrder
+
+	FROM dbo.DriverInfo AS D
+	INNER JOIN (
+
+		SELECT D.SessionId
+			,D.RacingNumber
+			,ROW_NUMBER() OVER(PARTITION BY D.TeamName ORDER BY D.Line ASC) AS DriverOrder
+			,T.TeamOrder
+
+		FROM dbo.DriverInfo AS D
+
+		INNER JOIN (
+			SELECT TeamName
+				,ROW_NUMBER() OVER(ORDER BY MIN(Line) ASC) AS TeamOrder
+
+			FROM dbo.DriverInfo
+
+			WHERE SessionId = @SessionId
+
+			GROUP BY TeamName
+		) AS T
+		ON D.TeamName = T.TeamName
+
+		WHERE D.SessionId = @SessionId
+
+	) AS O
+	ON D.SessionId = O.SessionId
+	AND D.RacingNumber = O.RacingNumber
+
+END
+GO

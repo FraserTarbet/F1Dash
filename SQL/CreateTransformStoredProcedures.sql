@@ -48,9 +48,11 @@ BEGIN
 		,CleanLap
 		,WeatherId
 		,StintNumber
+		,StintId
 	)
 	SELECT *
 		,SUM(CASE WHEN LapsInStint = 1 THEN 1 ELSE 0 END) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC) AS StintNumber
+		,SUM(CASE WHEN LapsInStint = 1 THEN 1 ELSE 0 END) OVER(ORDER BY Driver, NumberOfLaps ASC) AS StintId
 
 	FROM (
 
@@ -311,7 +313,7 @@ BEGIN
 		,L.LapId
 		,CASE WHEN P.PitInTime IS NOT NULL THEN 1 ELSE 0 END AS InPits
 
-	INTO #InsertRecords
+	INTO #SampleLap
 
 	FROM (
 
@@ -419,6 +421,34 @@ BEGIN
 	AND P.PitOutTime IS NOT NULL
 
 
+	-- Create identifiers for sequence of brakes/gears in each lap, and add DRS start/end fields
+
+	;WITH A AS(
+		SELECT *
+			,ROW_NUMBER() OVER(ORDER BY [Time] ASC) AS RN
+			,CASE WHEN Brake = 1 THEN -1 ELSE Gear END AS BrakeOrGear
+			,CASE WHEN DRS IN (0, 8) OR DRS % 2 <> 0 THEN 0 ELSE 1 END AS DRSActive -- Documentation light on meaning of different DRS flags, might need revisiting
+		FROM #SampleLap
+	)
+	,B AS (
+		SELECT *
+			,CASE WHEN LAG(BrakeOrGear, 1, 0) OVER(PARTITION BY LapId ORDER BY RN ASC) <> BrakeOrGear THEN RN ELSE NULL END AS BrakeOrGearStart
+			,CASE WHEN LAG(DRSActive, 1, NULL) OVER(ORDER BY RN ASC) <> DRSActive AND DRSActive = 1 THEN 1 ELSE 0 END AS DRSOpen
+			,CASE WHEN LAG(DRSActive, 1, NULL) OVER(ORDER BY RN ASC) <> DRSActive AND DRSActive = 0 THEN 1 ELSE 0 END AS DRSClose
+		FROM A
+	)
+	,C AS (
+		SELECT *
+			,COUNT(BrakeOrGearStart) OVER(ORDER BY RN ASC) AS BrakeOrGearId
+		FROM B
+	)
+	SELECT *
+
+	INTO #InsertRecords
+
+	FROM C
+
+
 	-- Clear existing session/driver data
 	DELETE
 	FROM dbo.MergedTelemetry
@@ -445,6 +475,11 @@ BEGIN
 		,Throttle
 		,Brake
 		,DRS
+		,BrakeOrGearId
+		,BrakeOrGear
+		,DRSOpen
+		,DRSClose
+		,DRSActive
 	)
 	SELECT SessionId
 		,Driver
@@ -463,6 +498,11 @@ BEGIN
 		,Throttle
 		,Brake
 		,DRS
+		,BrakeOrGearId
+		,BrakeOrGear
+		,DRSOpen
+		,DRSClose
+		,DRSActive
 
 	FROM #InsertRecords
 
@@ -528,7 +568,7 @@ BEGIN
 
 
 
-	DROP TABLE #Car, #Pos, #Times, #SampleMatching, #InsertRecords, #NearestNonSourceId
+	DROP TABLE #Car, #Pos, #Times, #SampleMatching, #InsertRecords, #NearestNonSourceId, #SampleLap
 
 END
 GO
@@ -591,6 +631,7 @@ BEGIN
 		WHERE SessionId = @SessionId
 		AND LapTime IS NOT NULL
 		AND CleanLap = 1
+		AND IsPersonalBest = 1
 	)
 	,Raw AS (
 		SELECT O.LapId
@@ -736,6 +777,7 @@ BEGIN
 	-- Insert new records
 	INSERT INTO dbo.TrackMap(
 		EventId
+		,SampleId
 		,X
 		,Y
 		,Z
@@ -744,6 +786,7 @@ BEGIN
 		,ZoneInputCategory
 	)
 	SELECT @EventId
+		,SampleId
 		,X
 		,Y
 		,Z
@@ -965,6 +1008,58 @@ BEGIN
 
 
 	DROP TABLE #Tel, #Map, #MatchedRows
+
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Merge_Zone
+GO
+CREATE PROCEDURE dbo.Merge_Zone @SessionId INT
+AS
+BEGIN
+
+	/*
+		Creates zone time records in same shape as sector times.
+		Zone time calculated using first sample time in zone and first sample in following zone.
+		Jitter in sample data means these times should be treated with caution, and will be particularly erratic for short zones.
+
+		Run after telemetry has been merged with track zones etc.
+	*/
+
+	INSERT INTO dbo.Zone(
+		LapId
+		,ZoneNumber
+		,ZoneTime
+		,ZoneSessionTime
+	)
+	SELECT LapId
+		,ZoneNumber
+		,LEAD(MinZoneTime, 1, MaxZoneTime) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) - MinZoneTime AS ZoneTime
+		,LEAD(MinZoneTime, 1, MaxZoneTime) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) AS ZoneSessionTime
+
+	FROM (
+
+		SELECT L.LapId
+			,L.Driver
+			,L.NumberOfLaps
+			,T.ZoneNumber
+			,MIN([Time]) AS MinZoneTime
+			,MAX([Time]) AS MaxZoneTime
+
+		FROM dbo.MergedTelemetry AS T
+
+		INNER JOIN dbo.MergedLapData AS L
+		ON T.LapId = L.LapId
+
+		WHERE T.SessionId = @SessionId
+
+		GROUP BY L.LapId
+			,L.Driver
+			,L.NumberOfLaps
+			,T.ZoneNumber
+
+	) AS A
 
 END
 GO

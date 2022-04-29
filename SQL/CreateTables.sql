@@ -176,10 +176,12 @@ CREATE TABLE dbo.DriverInfo(
 	,HeadshotUrl NVARCHAR(MAX)
 	,CountryCode VARCHAR(3)
 	,NameFormat VARCHAR(MAX)
+	,DriverOrder INT
+	,TeamOrder INT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE CLUSTERED INDEX IndexSessionId ON dbo.DriverInfo (SessionId)
-CREATE NONCLUSTERED INDEX IndexDriver ON dbo.DriverInfo (RacingNumber)
+CREATE CLUSTERED INDEX IndexSessionIdDriver ON dbo.DriverInfo (SessionId, RacingNumber)
+
 
 DROP TABLE IF EXISTS dbo.WeatherData
 CREATE TABLE dbo.WeatherData(
@@ -222,6 +224,11 @@ CREATE TABLE dbo.MergedTelemetry(
 	,Throttle INT
 	,Brake BIT
 	,DRS INT
+	,BrakeOrGearId INT
+	,BrakeOrGear INT
+	,DRSOpen BIT
+	,DRSClose BIT
+	,DRSActive BIT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE NONCLUSTERED INDEX IndexLapId ON dbo.MergedTelemetry (LapId)
@@ -231,7 +238,7 @@ DROP TABLE IF EXISTS dbo.MergedLapData
 CREATE TABLE dbo.MergedLapData(
 	SessionId INT
 	,Driver INT
-	,LapId INT
+	,LapId INT PRIMARY KEY
 	,TimeStart FLOAT
 	,TimeEnd FLOAT
 	,PitOutTime FLOAT
@@ -239,6 +246,7 @@ CREATE TABLE dbo.MergedLapData(
 	,LapTime FLOAT
 	,NumberOfLaps INT
 	,StintNumber INT
+	,StintId INT
 	,LapsInStint INT
 	,IsPersonalBest BIT
 	,Compound VARCHAR(MAX)
@@ -248,14 +256,15 @@ CREATE TABLE dbo.MergedLapData(
 	,WeatherId INT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE CLUSTERED INDEX IndexLapId ON dbo.MergedLapData (LapId)
 CREATE NONCLUSTERED INDEX IndexWeatherId ON dbo.MergedLapData (WeatherId)
 CREATE NONCLUSTERED INDEX IndexSessionIdDriverTimeStartTimeEnd ON dbo.MergedLapData (SessionId, Driver, TimeStart, TimeEnd)
+CREATE NONCLUSTERED INDEX IndexDriver ON dbo.MergedLapData (Driver)
 
 
 DROP TABLE IF EXISTS dbo.TrackMap
 CREATE TABLE dbo.TrackMap(
 	EventId INT
+	,SampleId INT
 	,X INT
 	,Y INT
 	,Z INT
@@ -266,3 +275,15 @@ CREATE TABLE dbo.TrackMap(
 )
 CREATE CLUSTERED INDEX IndexXY ON dbo.TrackMap (X, Y)
 CREATE NONCLUSTERED INDEX IndexEventId ON dbo.TrackMap (EventId)
+
+
+DROP TABLE IF EXISTS dbo.Zone
+CREATE TABLE dbo.Zone(
+	id INT IDENTITY(0, 1)
+	,LapId INT
+	,ZoneNumber INT
+	,ZoneTime FLOAT
+	,ZoneSessionTime FLOAT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
+CREATE CLUSTERED INDEX IndexLapIdZoneNumber ON dbo.Zone (LapId, ZoneNumber)

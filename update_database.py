@@ -273,6 +273,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
                 dataset[0].to_sql(dataset[1], sqlalchemy_engine, if_exists="append", index=False)
 
             cursor.execute("EXEC dbo.Update_SetNullTimes @SessionId=?", int(session["SessionId"]))
+            cursor.execute("EXEC dbo.Update_SetDriverTeamOrders @SessionId=?", int(session["SessionId"]))
 
             cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 0)
             cursor.commit()
@@ -324,6 +325,9 @@ def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, for
             cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_TelemetryTrackMapping @SessionId=?, @Driver=?", int(sessionId), int(driver))
             data_logging(pyodbc_connection, f"Ran Update_TelemetryTrackMapping for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
 
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Zone @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Merge_Zone for SessionId {sessionId}")
+
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
         data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
 
@@ -343,8 +347,8 @@ if __name__ == "__main__":
     ff.Cache.enable_cache("./ffcache")
     ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 551, False)
-    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 551)
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 425, False)
+    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 425)
     # wrapper()
 
 

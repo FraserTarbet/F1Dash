@@ -27,6 +27,8 @@ BEGIN
 		,T.Speed
 		,T.Gear
 		,T.Brake
+		,T.BrakeOrGearId
+		,T.BrakeOrGear
 		,D.Tla
 		,D.TeamColour
 
@@ -81,8 +83,12 @@ BEGIN
 		,T.Throttle
 		,T.Brake
 		,T.DRS
+		,T.DRSOpen
+		,T.DRSClose
+		,T.DRSActive
 		,D.Tla
 		,D.TeamColour
+		,D.DriverOrder
 
 	FROM dbo.Session AS S
 
@@ -107,60 +113,6 @@ END
 GO
 
 
-DROP PROCEDURE IF EXISTS dbo.Read_ZoneTimes
-GO
-CREATE PROCEDURE dbo.Read_ZoneTimes @EventId INT, @SessionName VARCHAR(MAX)
-AS
-BEGIN
-
-	/*
-		Times per zone each lap.
-		Could add this to load process if needed...
-	*/
-
-	SELECT L.Driver
-		,L.LapId
-		,L.Compound
-		,L.CleanLap
-		,L.TimeEnd
-		,T.ZoneNumber
-		,MAX(T.[Time]) - MIN(T.[Time]) AS ZoneTime
-		,D.Tla
-		,D.TeamColour
-
-
-	FROM dbo.Session AS S
-
-	INNER JOIN dbo.MergedLapData AS L
-	ON S.id = L.SessionId
-
-	INNER JOIN dbo.MergedTelemetry AS T
-	ON L.LapId = T.LapId
-
-	INNER JOIN dbo.DriverInfo AS D
-	ON S.id = D.SessionId
-	AND L.Driver = D.RacingNumber
-
-	WHERE EventId = @EventId
-	AND (
-		SessionName = @SessionName
-		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
-	)
-	AND T.[Source] = 'pos'
-
-	GROUP BY L.Driver
-		,L.LapId
-		,L.Compound
-		,L.CleanLap
-		,L.TimeEnd
-		,T.ZoneNumber
-		,D.Tla
-		,D.TeamColour
-
-END
-GO
-
-
 DROP PROCEDURE IF EXISTS dbo.Read_TrackMap
 GO
 CREATE PROCEDURE dbo.Read_TrackMap @EventId INT
@@ -171,7 +123,8 @@ BEGIN
 		Event track map. Handy for plotting fastest sectors/zones.
 	*/
 
-	SELECT X
+	SELECT SampleId
+		,X
 		,Y
 		,SectorNumber
 		,ZoneNumber
@@ -247,6 +200,7 @@ BEGIN
 	SELECT L.Driver
 		,L.LapId
 		,L.NumberOfLaps
+		,L.StintId
 		,L.StintNumber
 		,L.LapsInStint
 		,L.IsPersonalBest
@@ -259,6 +213,8 @@ BEGIN
 		,D.Tla
 		,D.TeamName
 		,D.TeamColour
+		,D.TeamOrder
+		,D.DriverOrder
 
 	FROM dbo.Session AS S
 
@@ -278,8 +234,64 @@ BEGIN
 		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 	)
 
-	ORDER BY D.TeamName ASC
-	,L.Driver ASC
+	ORDER BY D.TeamOrder ASC
+	,D.DriverOrder ASC
+	,StintNumber ASC
+	,LapsInStint ASC
+
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_ZoneTimes
+GO
+CREATE PROCEDURE dbo.Read_ZoneTimes @EventId INT, @SessionName VARCHAR(MAX)
+AS
+BEGIN
+
+	/*
+		Zone times for lap scatter plot and stint line graph
+	*/
+
+	SELECT L.Driver
+		,L.LapId
+		,L.NumberOfLaps
+		,L.StintId
+		,L.StintNumber
+		,L.LapsInStint
+		,L.IsPersonalBest
+		,L.Compound
+		,L.TyreAge
+		,L.CleanLap
+		,L.TimeEnd
+		,Z.ZoneNumber
+		,Z.ZoneTime
+		,D.Tla
+		,D.TeamName
+		,D.TeamColour
+		,D.TeamOrder
+		,D.DriverOrder
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.MergedLapData AS L
+	ON S.id = L.SessionId
+
+	INNER JOIN dbo.Zone AS Z
+	ON L.LapId = Z.LapId
+
+	INNER JOIN dbo.DriverInfo AS D
+	ON S.id = D.SessionId
+	AND L.Driver = D.RacingNumber
+
+	WHERE EventId = @EventId
+	AND (
+		SessionName = @SessionName
+		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+	)
+
+	ORDER BY D.TeamOrder ASC
+	,D.DriverOrder ASC
 	,StintNumber ASC
 	,LapsInStint ASC
 
