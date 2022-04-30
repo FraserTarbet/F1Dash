@@ -460,3 +460,77 @@ BEGIN
 
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_Config
+GO
+CREATE PROCEDURE dbo.Read_Config
+AS
+BEGIN
+
+	SELECT [Parameter]
+		,[Value]
+
+	FROM dbo.Config_App
+
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_AvailableSessions
+GO
+CREATE PROCEDURE dbo.Read_AvailableSessions
+AS
+BEGIN
+
+	/*
+		Returns all fully loaded/merged sessions and adds a row for all practice sessions if three have been completed
+	*/
+
+	SELECT EventId
+		,EventLabel
+		,SessionName
+
+	FROM (
+
+	SELECT E.id AS EventId
+		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
+		,E.EventDate
+		,SessionName
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.Event AS E
+	ON S.EventId = E.id
+
+	WHERE S.LoadStatus = 1
+	AND S.TransformStatus = 1
+
+	UNION ALL
+	SELECT EventId
+		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
+		,E.EventDate
+		,'Practice (all)' AS SessionName
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.Event AS E
+	ON S.EventId = E.id
+
+	WHERE S.LoadStatus = 1
+	AND S.TransformStatus = 1
+	AND LEFT(S.SessionName, 8) = 'Practice'
+
+	GROUP BY EventId
+		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName
+		,E.EventDate
+
+	HAVING COUNT(*) = 3
+
+	) AS S
+
+	ORDER BY EventDate DESC
+		,SessionName DESC
+
+END
+GO

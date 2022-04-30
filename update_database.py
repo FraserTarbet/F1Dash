@@ -1,10 +1,7 @@
 import fastf1 as ff
 import pandas as pd
-import numpy as np
 import datetime
 import os
-
-import sqlalchemy
 import sql_connection
 
 pd.options.mode.chained_assignment = None
@@ -341,6 +338,8 @@ def wrapper(force_eventId=None, force_sessionId=None, force_reload=False):
     refresh_schedule(pyodbc_connection, sqlalchemy_engine)
     load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId, force_reload)
     run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId)
+    pyodbc_connection["connection"].close()
+    sqlalchemy_engine.dispose()
 
 
 if __name__ == "__main__":

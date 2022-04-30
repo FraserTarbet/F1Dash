@@ -127,6 +127,17 @@ END
 GO
 
 
+DROP PROCEDURE IF EXISTS dbo.Logging_App
+GO
+CREATE PROCEDURE dbo.Logging_App @HostName NVARCHAR(MAX), @ClientInfo NVARCHAR(MAX), @Type VARCHAR(MAX), @Message NVARCHAR(MAX)
+AS
+BEGIN
+	INSERT INTO dbo.Log_App(HostName, ClientInfo, LogType, LogMessage)
+	VALUES (@HostName, @ClientInfo, @Type, @Message)
+END
+GO
+
+
 DROP PROCEDURE IF EXISTS dbo.Truncate_Schedule
 GO
 CREATE PROCEDURE dbo.Truncate_Schedule @ClearAll BIT
