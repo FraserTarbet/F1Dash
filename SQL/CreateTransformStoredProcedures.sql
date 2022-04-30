@@ -28,6 +28,9 @@ BEGIN
 	FROM dbo.MergedLapData
 	WHERE SessionId = @SessionId
 
+	-- Get existing max StintId; StintId should be unique across sessions
+	DECLARE @ExistingMaxStintId INT = (SELECT MAX(StintId) FROM dbo.MergedLapData)
+
 
 	-- Insert new rows
 	INSERT INTO dbo.MergedLapData (
@@ -52,7 +55,7 @@ BEGIN
 	)
 	SELECT *
 		,SUM(CASE WHEN LapsInStint = 1 THEN 1 ELSE 0 END) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC) AS StintNumber
-		,SUM(CASE WHEN LapsInStint = 1 THEN 1 ELSE 0 END) OVER(ORDER BY Driver, NumberOfLaps ASC) AS StintId
+		,SUM(CASE WHEN LapsInStint = 1 THEN 1 ELSE 0 END) OVER(ORDER BY Driver, NumberOfLaps ASC) + @ExistingMaxStintId AS StintId
 
 	FROM (
 

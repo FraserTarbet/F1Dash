@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import datetime
 import os
+
+import sqlalchemy
 import sql_connection
 
 pd.options.mode.chained_assignment = None
@@ -347,10 +349,9 @@ if __name__ == "__main__":
     ff.Cache.enable_cache("./ffcache")
     ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 425, False)
-    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 425)
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 424, False)
+    # run_transforms(pyodbc_connection, sqlalchemy_engine)
     # wrapper()
-
 
     ff.Cache.clear_cache("./ffcache")
 

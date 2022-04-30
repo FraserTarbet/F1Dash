@@ -12,6 +12,7 @@ BEGIN
 
 	SELECT L.Driver
 		,L.LapId
+		,L.NumberOfLaps
 		,L.StintNumber
 		,L.LapsInStint
 		,L.IsPersonalBest
@@ -21,7 +22,7 @@ BEGIN
 		,T.NearestNonSourceId AS CarSampleId
 		,T.SectorNumber
 		,T.ZoneNumber
-		,T.[Time]
+		,T.[Time] + SO.SessionTimeOffset AS SessionTime
 		,T.X
 		,T.Y
 		,T.Speed
@@ -43,6 +44,9 @@ BEGIN
 	INNER JOIN dbo.DriverInfo AS D
 	ON S.id = D.SessionId
 	AND L.Driver = D.RacingNumber
+
+	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+	ON S.id = SO.SessionId
 
 	WHERE EventId = @EventId
 	AND (
@@ -67,6 +71,7 @@ BEGIN
 
 	SELECT L.Driver
 		,L.LapId
+		,L.NumberOfLaps
 		,L.StintNumber
 		,L.LapsInStint
 		,L.IsPersonalBest
@@ -76,7 +81,7 @@ BEGIN
 		,T.NearestNonSourceId AS PositionSampleId
 		,T.SectorNumber
 		,T.ZoneNumber
-		,T.[Time]
+		,T.[Time] + SO.SessionTimeOffset AS SessionTime
 		,T.RPM
 		,T.Speed
 		,T.Gear
@@ -101,6 +106,9 @@ BEGIN
 	INNER JOIN dbo.DriverInfo AS D
 	ON S.id = D.SessionId
 	AND L.Driver = D.RacingNumber
+
+	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+	ON S.id = SO.SessionId
 
 	WHERE EventId = @EventId
 	AND (
@@ -150,17 +158,20 @@ BEGIN
 	SELECT L.Driver
 		,L.LapId
 		,L.NumberOfLaps
-		,L.StintNumber
+		,L.StintId
+		,OS.OffsetStintNumber AS StintNumber
 		,L.LapsInStint
 		,L.IsPersonalBest
 		,L.Compound
 		,L.TyreAge
 		,L.CleanLap
-		,L.TimeEnd
+		,L.TimeEnd + SO.SessionTimeOffset AS SessionTime
 		,L.LapTime
 		,D.Tla
 		,D.TeamName
 		,D.TeamColour
+		,D.TeamOrder
+		,D.DriverOrder
 
 	FROM dbo.Session AS S
 
@@ -171,6 +182,12 @@ BEGIN
 	ON S.id = D.SessionId
 	AND L.Driver = D.RacingNumber
 
+	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+	ON S.id = SO.SessionId
+
+	INNER JOIN dbo.OffsetStintNumbers(@EventId, @SessionName) AS OS
+	ON L.StintId = OS.StintId
+
 	WHERE EventId = @EventId
 	AND (
 		SessionName = @SessionName
@@ -178,9 +195,9 @@ BEGIN
 	)
 	AND L.LapTime IS NOT NULL
 
-	ORDER BY D.TeamName ASC
-		,L.Driver ASC
-		,StintNumber ASC
+	ORDER BY D.TeamOrder ASC
+		,D.DriverOrder ASC
+		,OS.OffsetStintNumber ASC
 		,LapsInStint ASC
 
 END
@@ -201,13 +218,13 @@ BEGIN
 		,L.LapId
 		,L.NumberOfLaps
 		,L.StintId
-		,L.StintNumber
+		,OS.OffsetStintNumber AS StintNumber
 		,L.LapsInStint
 		,L.IsPersonalBest
 		,L.Compound
 		,L.TyreAge
 		,L.CleanLap
-		,L.TimeEnd
+		,L.TimeEnd + SO.SessionTimeOffset AS SessionTime
 		,Sec.SectorNumber
 		,Sec.SectorTime
 		,D.Tla
@@ -228,6 +245,12 @@ BEGIN
 	ON S.id = D.SessionId
 	AND L.Driver = D.RacingNumber
 
+	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+	ON S.id = SO.SessionId
+
+	INNER JOIN dbo.OffsetStintNumbers(@EventId, @SessionName) AS OS
+	ON L.StintId = OS.StintId
+
 	WHERE EventId = @EventId
 	AND (
 		SessionName = @SessionName
@@ -236,7 +259,7 @@ BEGIN
 
 	ORDER BY D.TeamOrder ASC
 	,D.DriverOrder ASC
-	,StintNumber ASC
+	,OS.OffsetStintNumber ASC
 	,LapsInStint ASC
 
 END
@@ -257,13 +280,13 @@ BEGIN
 		,L.LapId
 		,L.NumberOfLaps
 		,L.StintId
-		,L.StintNumber
+		,OS.OffsetStintNumber AS StintNumber
 		,L.LapsInStint
 		,L.IsPersonalBest
 		,L.Compound
 		,L.TyreAge
 		,L.CleanLap
-		,L.TimeEnd
+		,L.TimeEnd + SO.SessionTimeOffset AS SessionTime
 		,Z.ZoneNumber
 		,Z.ZoneTime
 		,D.Tla
@@ -284,6 +307,12 @@ BEGIN
 	ON S.id = D.SessionId
 	AND L.Driver = D.RacingNumber
 
+	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+	ON S.id = SO.SessionId
+
+	INNER JOIN dbo.OffsetStintNumbers(@EventId, @SessionName) AS OS
+	ON L.StintId = OS.StintId
+
 	WHERE EventId = @EventId
 	AND (
 		SessionName = @SessionName
@@ -292,8 +321,142 @@ BEGIN
 
 	ORDER BY D.TeamOrder ASC
 	,D.DriverOrder ASC
-	,StintNumber ASC
+	,OS.OffsetStintNumber ASC
 	,LapsInStint ASC
+
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_ConditionsData
+GO
+CREATE PROCEDURE dbo.Read_ConditionsData @EventId INT, @SessionName VARCHAR(MAX)
+AS
+BEGIN
+
+	/*
+		Weather, track status, and track activity data for session conditions visual
+	*/
+
+	DECLARE @ActivityTimeRange FLOAT = 60 * CAST(1000000000 AS FLOAT) -- 1 minute either side of weather sample
+
+
+	;WITH Weather AS (
+		SELECT S.id AS SessionId
+			,W.Time + SO.SessionTimeOffset AS SessionTime
+			,W.AirTemp
+			,W.Humidity
+			,W.Pressure
+			,W.Rainfall
+			,W.TrackTemp
+			,W.WindDirection
+			,W.WindSpeed
+
+		FROM dbo.Session AS S
+
+		INNER JOIN dbo.WeatherData AS W
+		ON S.id = W.SessionId
+
+		INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+		ON S.id = SO.SessionId
+		AND W.[Time] >= SO.MinStartTime
+		AND W.[Time] < SO.MaxFinalisedTime
+
+		WHERE EventId = @EventId
+		AND (
+			SessionName = @SessionName
+			OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+		)
+	)
+	, Track AS (
+		SELECT S.id AS SessionId
+			,T.Time + SO.SessionTimeOffset AS SessionTime
+			,T.Message AS TrackStatus
+
+		FROM dbo.Session AS S
+
+		INNER JOIN dbo.TrackStatus AS T
+		ON S.id = T.SessionId
+
+		INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+		ON S.id = SO.SessionId
+
+		WHERE EventId = @EventId
+		AND (
+			SessionName = @SessionName
+			OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+		)
+	)
+	, TimesJoin AS (
+		SELECT W.SessionId
+			,W.SessionTime AS WeatherTime
+			,W.AirTemp
+			,W.Humidity
+			,W.Pressure
+			,W.Rainfall
+			,W.TrackTemp
+			,W.WindDirection
+			,W.WindSpeed
+			,T.SessionTime AS TrackTime
+			,T.TrackStatus
+			,ROW_NUMBER() OVER(PARTITION BY W.SessionTime ORDER BY T.SessionTime DESC) AS RN
+
+		FROM Weather AS W
+
+		LEFT JOIN Track AS T
+		ON W.SessionTime >= T.SessionTime
+	)
+
+	SELECT T.SessionId
+		,T.WeatherTime AS SessionTime
+		,T.AirTemp
+		,T.Humidity / 100.0 AS Humidity
+		,T.Pressure
+		,T.Rainfall
+		,T.TrackTemp
+		,T.WindDirection
+		,T.WindSpeed
+		,T.TrackStatus
+		,COUNT(L.SessionTime) AS Laps
+
+	FROM TimesJoin AS T
+
+	LEFT JOIN (
+		-- Get track activity from lap data; base it on rolling count of laps ending
+		SELECT L.TimeEnd + SO.SessionTimeOffset AS SessionTime
+
+		FROM dbo.Session AS S
+
+		INNER JOIN dbo.MergedLapData AS L
+		ON S.id = L.SessionId
+
+		INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+		ON S.id = SO.SessionId
+
+		WHERE EventId = @EventId
+		AND (
+			SessionName = @SessionName
+			OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+		)
+		AND L.TimeEnd IS NOT NULL
+	) AS L
+	ON T.WeatherTime + @ActivityTimeRange >= L.SessionTime
+	AND T.WeatherTime - @ActivityTimeRange < L.SessionTime
+
+	WHERE RN = 1
+
+	GROUP BY T.SessionId
+		,T.WeatherTime
+		,T.AirTemp
+		,T.Humidity
+		,T.Pressure
+		,T.Rainfall
+		,T.TrackTemp
+		,T.WindDirection
+		,T.WindSpeed
+		,T.TrackStatus
+
+	ORDER BY T.WeatherTime ASC
 
 END
 GO
