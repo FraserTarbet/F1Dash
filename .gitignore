@@ -3,3 +3,4 @@ __pycache__
 credentials.py
 fastf1_http_cache.sqlite
 /ffcache
+/file_system_store

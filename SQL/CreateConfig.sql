@@ -16,3 +16,4 @@ VALUES
 ('ForceTestData', '0')
 ,('ForceMobileVersion', '0')
 ,('MobileInitialScale', '1')
+,('MaxFileStoreSizeInGB', '2')
