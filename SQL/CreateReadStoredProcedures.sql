@@ -534,3 +534,38 @@ BEGIN
 
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_SessionDrivers
+GO
+CREATE PROCEDURE dbo.Read_SessionDrivers @EventId INT, @SessionName VARCHAR(MAX)
+AS
+BEGIN
+
+	/*
+		Drivers and teams participating in given session. Used for filter controls.
+	*/
+
+	SELECT DISTINCT TeamOrder
+		,TeamName
+		,TeamColour
+		,DriverOrder
+		,RacingNumber
+		,Tla
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.DriverInfo AS D
+	ON S.id = D.SessionId
+
+	WHERE EventId = @EventId
+	AND (
+		SessionName = @SessionName
+		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+	)
+
+	ORDER BY TeamOrder ASC
+		,DriverOrder ASC
+
+END
+GO

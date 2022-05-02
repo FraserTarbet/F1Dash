@@ -8,6 +8,7 @@ def delete_files(delete_all=False):
     folder_size = 0
     file_modified_dict = {}
     directory = "./file_system_store/"
+    deleted_file_count = 0
     for file in os.listdir(directory):
         file_size = os.path.getsize(directory + file)
         folder_size += file_size
@@ -25,11 +26,16 @@ def delete_files(delete_all=False):
             folder_size_in_GB -= size / 1000000000
             os.remove(directory + file)
             sorted_files.pop(0)
+            deleted_file_count += 1
+
+        return deleted_file_count
 
     if delete_all == True:
         for key in file_modified_dict:
             file = file_modified_dict[key][0]
             os.remove(directory + file)
+
+    return None
 
 
 def cleanup():

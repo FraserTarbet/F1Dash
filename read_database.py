@@ -22,7 +22,7 @@ def app_logging(client_info, type, message):
     cursor.execute("EXEC dbo.Logging_App @HostName=?, @ClientInfo=?, @Type=?, @Message=?", host_name, client_info, type, message)
     cursor.commit()
     pyodbc_connection["connection"].close()
-    print("app_logging: " + message)
+    print("app_logging: " + type + ": " + message)
 
 
 def get_available_sessions():
@@ -64,7 +64,8 @@ def read_session_data(event_id, session_name, use_test_data):
         "lap_times": "LapTimes",
         # "sector_times": "SectorTimes",
         # "zone_times": "ZoneTimes",
-        # "conditions_data": "ConditionsData"
+        # "conditions_data": "ConditionsData",
+        "session_drivers": "SessionDrivers"
     }
     data_dict_list = []
     threads = []

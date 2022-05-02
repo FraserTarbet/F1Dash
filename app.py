@@ -15,7 +15,9 @@ file_store.size_limit_in_GB = float(config["MaxFileStoreSizeInGB"])
 file_store.delete_files(delete_all=True)
 
 dash_app = DashProxy(__name__,
-    meta_tags=[],
+    meta_tags=[
+        {"name": "viewport", "content": "width=device-width, initial-scale=0.5"}
+    ],
     transforms=[ServersideOutputTransform()]
     # suppress_callback_exceptions=True
 )
@@ -45,7 +47,9 @@ dash_app.layout = html.Div(
 dash_app.clientside_callback(
     """
     function(trigger){
-        const client_info = {height :screen.height, width: screen.width, userAgent: navigator.userAgent};
+        const client_info = {userAgent: navigator.userAgent, height: screen.height, width: screen.width};
+        client_info.isMobile = Boolean(client_info.width < """ + config["DetectMobileWidth"] + """ || client_info.height < """ + config["DetectMobileHeight"] + """);
+
         return client_info
     }
     """,
@@ -57,27 +61,25 @@ dash_app.clientside_callback(
 @dash_app.callback(
     Output("container", "children"),
     Output("events_and_sessions", "data"),
-    Output("top_filters", "data"),
-    Output("crossfilters", "data"),
-    Output("time_filters", "data"),
     Input("client_info", "data")
 )
 def initiate(client_info):
-    # Use this callback to customise layouts within container based on desktop/mobile device
-    # print(client_info)
 
+    # Use this callback to customise layouts within container based on desktop/mobile device
+
+    is_mobile = True if client_info["isMobile"] == True else False
+    if is_mobile == True or config["ForceMobileLayout"] == "1":
+        layout = layouts.layout_dict["mobile"]
+    else:
+        layout = layouts.layout_dict["desktop"]
+
+    read_database.app_logging(str(client_info), "initiate", "mobile" if is_mobile else "desktop")
+    
     available_events_and_sessions = json.dumps(read_database.get_available_sessions())
 
-    top_filters = {}
-    crossfilters = {}
-    time_filters = {}
-
     return (
-        layouts.desktop,
-        available_events_and_sessions,
-        top_filters,
-        crossfilters,
-        time_filters
+        layout,
+        available_events_and_sessions
     )
 
 # Open/close parameters panel
@@ -113,18 +115,22 @@ def open_close_parameters(open_click, close_click, datasets, is_open, selected_s
             open = False
     return open
 
-# Populate session options and filters on panel open
+# Populate session options and filters on panel open or filter change
 @dash_app.callback(
     Output("event_select", "options"),
     Output("event_select", "value"),
     Output("session_select", "options"),
     Output("session_select", "value"),
+    Output("team_filter_dropdown", "options"),
+    Output("driver_filter_dropdown", "options"),
     Input("open_parameters_button", "n_clicks"),
+    Input("top_filters", "data"),
     State("events_and_sessions", "data"),
     State("selected_session", "data"),
-    State("loaded_session", "data")
+    State("loaded_session", "data"),
+    State("datasets", "data")
 )
-def populate_parameters(click, events_and_sessions, selected_session, loaded_session):
+def populate_parameters(click, top_filters, events_and_sessions, selected_session, loaded_session, datasets):
     events_and_sessions = json.loads(events_and_sessions)[0]
 
     # Event
@@ -149,13 +155,50 @@ def populate_parameters(click, events_and_sessions, selected_session, loaded_ses
     else:
         # Populate selected session into input
         session_value = loaded_session_name
+
+    # Team & driver filters
+    if datasets is None:
+        team_options = no_update
+        driver_options = no_update
+    else:
+        session_drivers = datasets["session_drivers"]
+        team_options = visuals.get_filter_options(session_drivers, top_filters, ("TeamName", "TeamName"), ["TeamName", "Driver"])
+        driver_options = visuals.get_filter_options(session_drivers, top_filters, ("Tla", "RacingNumber"), ["Driver"])
     
     return (
         events_list,
         event_value,
         sessions_list,
-        session_value
+        session_value,
+        team_options,
+        driver_options
     )
+
+
+# Toggle parameters panel close enable/disable, as well as loading indicator
+@dash_app.callback(
+    Output("close_parameters_button", "disabled"),
+    Output("spinner_col", "children"),
+    Input("open_parameters_button", "n_clicks"),
+    Input("selected_session", "data")
+)
+def lock_panel_on_loading(open_parameters_button, selected_session):
+    caller = callback_context.triggered[0]["prop_id"].split(".")[0]
+    if caller == "open_parameters_button":
+        return (
+            False,
+            None
+        )
+    elif caller == "selected_session":
+        return (
+            True,
+            dbc.Spinner(color="primary")
+        )
+    else:
+        return (
+            True,
+            no_update
+        )
 
 # Request session datasets
 @dash_app.callback(
@@ -163,31 +206,42 @@ def populate_parameters(click, events_and_sessions, selected_session, loaded_ses
     Input("load_button", "n_clicks"),
     State("event_select", "value"),
     State("session_select", "value"),
-    State("selected_session", "data")
+    State("selected_session", "data"),
+    State("client_info", "data")
 )
-def request_datasets(click, event_id, session_name, selected_session_state):
+def request_datasets(click, event_id, session_name, selected_session_state, client_info):
     if click is None:
-        return no_update
-    if selected_session_state is None:
-        selected_session = {"EventId": event_id, "SessionName": session_name}   
+        new_request = False
+    if click is not None and selected_session_state is None:
+        new_request = True
     if selected_session_state is not None:
         selected_session_state = json.loads(selected_session_state)
         if selected_session_state["EventId"] != event_id or selected_session_state["SessionName"] != session_name:
-            selected_session = {"EventId": event_id, "SessionName": session_name}  
+            new_request = True
         else:
-            return no_update       
+            new_request = False     
 
-    return json.dumps(selected_session)
+    if new_request == True:
+        selected_session = {"EventId": event_id, "SessionName": session_name} 
+        read_database.app_logging(str(client_info), "request_datasets", f"event_id: {event_id}, session_name: {session_name}")
+        cache_files_deleted = file_store.delete_files()
+        if cache_files_deleted is not None:
+            read_database.app_logging(str(client_info), "delete_files", f"{str(cache_files_deleted)} cache files deleted")
+        return json.dumps(selected_session)
+    else:
+        return no_update
 
 
 # Load session datasets to store
 @dash_app.callback(
-    ServersideOutput("datasets", "data"),
-    Output("load_spinner", "loading_output"),
-    Output("loaded_session", "data"),
-    Input("selected_session", "data")
+    ServersideOutput("datasets", "data", session_check=False),
+    Input("selected_session", "data"),
+    memoize = True
 )
 def load_datasets(selected_session):
+
+    # Note: Adding client info state into this callback would prevent sharing of cache between sessions 
+    # because it would appear as a distinct arg to ServersideOutput
 
     if selected_session == None:
         return (
@@ -199,60 +253,119 @@ def load_datasets(selected_session):
         selected_session = json.loads(selected_session)
         event_id = selected_session["EventId"]
         session_name = selected_session["SessionName"]
-        loaded_session = json.dumps({"EventId": event_id, "SessionName": session_name})
+        
         use_test_data = True if config["ForceTestData"] == "1" else False
         data_dict = read_database.read_session_data(event_id, session_name, use_test_data)
         
         return (
-            data_dict,
-            1, 
-            loaded_session
+            data_dict
         )
 
-# Update heading on dataset reload
+# Update heading and loaded session keys on dataset reload
 @dash_app.callback(
     Output("dashboard_heading", "children"),
-    Input("loaded_session", "data"),
-    State("events_and_sessions", "data")
+    Output("loaded_session", "data"),
+    Input("datasets", "data"),
+    State("events_and_sessions", "data"),
+    State("selected_session", "data")
 )
-def refresh_heading(loaded_session, events_and_sessions):
-    if loaded_session is None:
+def refresh_heading(datasets, events_and_sessions, selected_session):
+    if selected_session is None:
         return no_update
     else:
-        loaded_session = json.loads(loaded_session)
-        event_id = loaded_session["EventId"]
-        session_name = loaded_session["SessionName"]
+        selected_session = json.loads(selected_session)
+        event_id = selected_session["EventId"]
+        session_name = selected_session["SessionName"]
         events_dict = json.loads(events_and_sessions)[0]["events"]
         for event_name in events_dict:
             if int(events_dict[event_name]) == int(event_id): break
 
-    return f"{event_name}, {session_name}"
+        loaded_session = json.dumps({"EventId": event_id, "SessionName": session_name})
+
+    return (
+        f"{event_name}, {session_name}",
+        loaded_session
+    )
 
 
+# Update filters
+@dash_app.callback(
+    Output("top_filters", "data"),
+    Output("crossfilters", "data"),
+    Output("time_filters", "data"),
+    Input("team_filter_dropdown", "value"),
+    Input("driver_filter_dropdown", "value"),
+    State("datasets", "data")
+)
+def update_filters(team_filter_values, driver_filter_values, datasets):
 
-# Refresh all four main visuals on dataset reload
+    if datasets is not None:
+        caller = callback_context.triggered[0]["prop_id"].split(".")[0]
+
+         # Top level filters
+        if caller in ["team_filter_dropdown", "driver_filter_dropdown"]:
+
+            # TODO: Clear filtered drivers if they're not in filtered teams
+
+            top_filters = {}
+            if team_filter_values is not None and len(team_filter_values) > 0: top_filters["TeamName"] = team_filter_values
+            if driver_filter_values is not None and len(driver_filter_values) > 0: top_filters["Driver"] = driver_filter_values
+
+            crossfilters = {} # Clear crossfilters on top filter change to avoid orphaned filtering, e.g. crossfiltering a lap for an unfiltered driver
+            time_filters = no_update
+
+    else:
+        # Create empty dictionaries when no dataset has been loaded yet
+        top_filters = {}
+        crossfilters = {}
+        time_filters = {}
+
+    return (
+        top_filters,
+        crossfilters,
+        time_filters
+    )
+
+
+# Update all four main visuals on dataset reload, filter update, or visual interation
 @dash_app.callback(
     Output("lap_plot", "figure"),
     Output("track_map", "figure"),
     Output("stint_graph", "figure"),
     Output("inputs_graph", "figure"),
-    Input("datasets", "data")
+    Input("datasets", "data"),
+    Input("top_filters", "data"),
+    Input("crossfilters", "data"),
+    Input("time_filters", "data"),
+    State("client_info", "data")
 )
-def refresh_visuals(data):
+def refresh_visuals(datasets, top_filters, crossfilters, time_filters, client_info):
 
     # Ascertain which input has triggered this callback
     caller = callback_context.triggered[0]["prop_id"].split(".")[0]
 
+
     # Updated dataset triggers rebuild of all visuals
-    if caller == "datasets" or caller == "":
-        lap_plot = visuals.build_lap_plot()
-        track_map = visuals.build_track_map()
-        stint_graph = visuals.build_stint_graph()
-        inputs_graph = visuals.build_inputs_graph()
+    # Updated top level filters also rebuilds all visuals except conditions plot?
+    if caller in ["datasets", "top_filters",  ""]:
+        data_dict = datasets
+        filters = [
+            top_filters,
+            crossfilters,
+            time_filters
+        ]
+        client_is_mobile = client_info["isMobile"]
+        lap_plot = visuals.build_lap_plot(data_dict, filters, client_is_mobile)
+        track_map = visuals.build_track_map(data_dict, filters, client_is_mobile)
+        stint_graph = visuals.build_stint_graph(data_dict, filters, client_is_mobile)
+        inputs_graph = visuals.build_inputs_graph(data_dict, filters, client_is_mobile)
 
-    # Updated top level filters rebuilds all visuals?
-
-    # Updated crossfilters updates only affected visuals?
+    # Updated crossfilters & time filters update only affected visuals
+    if caller in ["crossfilters", "time_filters"]:
+        lap_plot = no_update
+        track_map = no_update
+        stint_graph = no_update
+        inputs_graph = no_update
 
     # Hovering is very selective
 

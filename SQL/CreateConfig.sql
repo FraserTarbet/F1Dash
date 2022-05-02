@@ -13,7 +13,8 @@ INSERT INTO dbo.Config_App(
 	,[Value]
 )
 VALUES
-('ForceTestData', '0')
-,('ForceMobileVersion', '0')
-,('MobileInitialScale', '1')
+('ForceTestData', '1')
+,('ForceMobileLayout', '0')
+,('DetectMobileWidth', '800')
+,('DetectMobileHeight', '600')
 ,('MaxFileStoreSizeInGB', '2')
