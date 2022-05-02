@@ -10,7 +10,9 @@ def get_figure(client_is_mobile):
             "plot_bgcolor": "rgba(0, 0, 0, 0)",
             "paper_bgcolor": "rgba(0, 0, 0, 0)"
         },
-        font_color="white"
+        font_color="white",
+        dragmode="select",
+        clickmode="event+select"
     )
 
     if client_is_mobile:
@@ -48,7 +50,6 @@ def empty_figure(fig):
 def filter_data(data, filter_dict_list, ignore=[]):
 
     # Loop through filters and filter dataframe by each
-    print(filter_dict_list)
     for filter_dict in filter_dict_list:
         for field in filter_dict:
             if field in ["TimeFrom", "TimeTo"]:
@@ -57,7 +58,6 @@ def filter_data(data, filter_dict_list, ignore=[]):
                     pass
             else:
                 if field in data.columns and field not in ignore:
-                    print(field)
                     data = data[(data[field].isin(filter_dict[field]))]
 
     return data
@@ -201,10 +201,10 @@ def build_lap_plot(data_dict, filters, client_is_mobile):
         )
     
     compound_colour = {
-        "SOFT": "rgb(255, 0, 0)",
-        "MEDIUM": "rgb(255, 191, 0)",
-        "HARD": "rgb(150, 150, 150)",
-        "UNKNOWN": "rgb(0, 0, 0)"
+        "SOFT": "rgba(255, 0, 0, 255)",
+        "MEDIUM": "rgba(255, 191, 0, 255)",
+        "HARD": "rgba(150, 150, 150, 255)",
+        "UNKNOWN": "rgba(0, 0, 0, 255)"
     }
     data["colour_compound"] = data["Compound"].apply(lambda x: compound_colour[x])
 
@@ -406,11 +406,155 @@ def build_inputs_graph(data_dict, filters, client_is_mobile):
     return fig
 
 
-def build_conditions_plot(data_dict, filters, client_is_mobile):
+def build_conditions_plot(data_dict, client_is_mobile):
 
     # Weather, track status, and track activity over total session time
     # Not crossfiltered by anything
 
     fig = get_figure(client_is_mobile)
+    fig.update_layout(
+        bargap=0,
+        showlegend=False,
+        selectdirection="h"
+    )
+
+    if data_dict is None:
+        fig = empty_figure(fig)
+        return fig
+
+    data = data_dict["conditions_data"].copy()
+
+    if len(data) == 0:
+        fig = empty_figure(fig)
+        return fig
+    
+    max_laps = float(data["Laps"].max())
+    data["Laps"] = data["Laps"].apply(lambda x: x / max_laps)
+    
+    status_colours = {
+        "AllClear": "rgb(0, 255, 0)",
+        "Red": "rgb(255, 0, 0)",
+        "Yellow": "rgb(255, 191, 0)",
+        "SCDeployed": "rgb(242, 140, 40)",
+        "VSCDeployed": "rgb(191, 64, 191)"
+    }
+
+    metrics = {
+        "Humidity": {
+            "trace_type": "scatter",
+            "axis_label": "Humidity",
+            "hoverable": True, 
+            "text_suffix": "%",
+            "colour": "rgb(100, 100, 255)"
+        },
+        "Rainfall": {
+            "trace_type": "scatter",
+            "axis_label": "Rain",
+            "hoverable": False, 
+            "text_suffix": "",
+            "colour": "rgb(0, 0, 255)"
+        },
+        "TrackTemp": {
+            "trace_type": "annotation",
+            "axis_label": "Temp (track)",
+            "hoverable": False,
+            "text_suffix": "°C"
+        },
+        "AirTemp": {
+            "trace_type": "annotation",
+            "axis_label": "Temp (air)",
+            "hoverable": False,
+            "text_suffix": "°C"
+        },
+        "WindSpeed": {
+            "trace_type": "annotation",
+            "axis_label": "Wind speed",
+            "hoverable": False,
+            "text_suffix": "kph"
+        },
+        "WindDirection": {
+            "trace_type": "annotation",
+            "axis_label": "Wind direction",
+            "hoverable": False,
+            "text_suffix": "°"
+        },
+        "Laps": {
+            "trace_type": "scatter",
+            "axis_label": "Track activity",
+            "hoverable": False,
+            "text_suffix": "",
+            "colour": "rgb(255, 0, 0)"
+        }
+    }
+
+    # Get evenly spaced samples of session time for annotations
+    x_spacing = int(len(data) / 10)
+    x_indices = list(range(int(x_spacing / 2), len(data), x_spacing))
+    x_sampled_data = data[(data.index.isin(x_indices))]
+    x_sampled_data.reset_index(drop=True, inplace=True)
+
+    # Hover labels
+    for metric in metrics:
+        data["text_" + metric] = data[metric].apply(lambda x: str(x) + metrics[metric]["text_suffix"])
+
+    # Traces
+    y_values = []
+    y_labels = []
+    for y, metric in enumerate(metrics):
+        metric_dict = metrics[metric]
+        y_values.append(y + 0.5)
+        y_labels.append(metric_dict["axis_label"])
+        
+        if metric_dict["trace_type"] == "scatter":
+            fig.add_trace(
+                go.Scatter(
+                    x=data["SessionTime"],
+                    y=data[metric] + y,
+                    hoverinfo="text" if metric_dict["hoverable"] == True else "none",
+                    hovertext=data["text_" + metric] if metric_dict["hoverable"] == True else "", 
+                    marker_color=metric_dict["colour"],
+                    fill="toself"
+                )
+            )
+        elif metric_dict["trace_type"] == "annotation":
+            for i in range(0, len(x_sampled_data)):
+                fig.add_annotation(
+                    x=x_sampled_data["SessionTime"].iloc[i],
+                    y=y + 0.5,
+                    text=data["text_" + metric].iloc[i],
+                    showarrow=False
+                )
+
+    # Do track status separately
+    bar_bottom = max(y_values) + 0.7
+    y_values.append(max(y_values) + 1)
+    y_labels.append("Track status")
+    
+    for status in status_colours:
+        trace_data = data[(data["TrackStatus"] == status)]
+        fig.add_trace(
+            go.Bar(
+                x=trace_data["SessionTime"],
+                y=[0.6] * len(trace_data),
+                base=[bar_bottom] * len(trace_data),
+                marker_color=status_colours[status],
+                hoverinfo="text",
+                hovertext=status
+            )
+        )
+    
+    # Update axes
+    fig.update_yaxes(
+        tickvals = y_values,
+        ticktext = y_labels
+    )
+    fig.update_xaxes(
+        visible=False
+    )
+
+    fig.update_layout(
+        margin={"l":100, "r":100, "t":0, "b":0},
+        height=200
+    )
 
     return fig

@@ -1,7 +1,6 @@
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
-
 # Layouts for mobile / non-mobile devices, to be picked by initial dash callback on client load
 
 desktop = [
@@ -113,16 +112,41 @@ desktop = [
     ),
     dbc.Row(
         [
-            dbc.Col(dcc.Graph(id="lap_plot"), lg=8),
-            dbc.Col(dcc.Graph(id="track_map"), lg=4)
+            dbc.Col(dcc.Graph(id="lap_plot", config={"displayModeBar": False}), lg=8),
+            dbc.Col(dcc.Graph(id="track_map", config={"displayModeBar": False}), lg=4)
         ],
         align="center", justify="evenly"
     ),
     dbc.Row(
         [
-            dbc.Col(dcc.Graph(id="stint_graph"), lg=4),
-            dbc.Col(dcc.Graph(id="inputs_graph"), lg=8)
+            dbc.Col(dcc.Graph(id="stint_graph", config={"displayModeBar": False}), lg=4),
+            dbc.Col(dcc.Graph(id="inputs_graph", config={"displayModeBar": False}), lg=8)
         ]
+    ),
+    dbc.Row(
+        [
+            dbc.Col(dbc.Button(id="open_conditions_button", children="Session overview"), lg=2),
+            dbc.Col(lg=10)
+        ],
+        align="center"
+    ),
+    dbc.Offcanvas(
+        id="conditions_panel",
+        is_open=True,
+        close_button=False,
+        scrollable=True,
+        placement="bottom",
+        style={"height": 250},
+        # children=[
+        #     dbc.Row(
+        #         [
+        #             dbc.Col(dcc.Graph(id="conditions_plot", config={"displayModeBar": False}))
+        #         ],
+        #         align="start",
+        #         justify="center"
+        #     )
+        # ]
+        children=dcc.Graph(id="conditions_plot", config={"displayModeBar": False})
     )
 ]
 

@@ -64,7 +64,7 @@ def read_session_data(event_id, session_name, use_test_data):
         "lap_times": "LapTimes",
         # "sector_times": "SectorTimes",
         # "zone_times": "ZoneTimes",
-        # "conditions_data": "ConditionsData",
+        "conditions_data": "ConditionsData",
         "session_drivers": "SessionDrivers"
     }
     data_dict_list = []

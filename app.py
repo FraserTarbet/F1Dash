@@ -16,7 +16,7 @@ file_store.delete_files(delete_all=True)
 
 dash_app = DashProxy(__name__,
     meta_tags=[
-        {"name": "viewport", "content": "width=device-width, initial-scale=0.5"}
+        {"name": "viewport", "content": "width=device-width, initial-scale=1"}
     ],
     transforms=[ServersideOutputTransform()]
     # suppress_callback_exceptions=True
@@ -293,37 +293,64 @@ def refresh_heading(datasets, events_and_sessions, selected_session):
     Output("top_filters", "data"),
     Output("crossfilters", "data"),
     Output("time_filters", "data"),
+    Output("team_filter_dropdown", "value"),
+    Output("driver_filter_dropdown", "value"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
+    Input("track_split_selector", "value"),
+    Input("clean_laps_checkbox", "value"),
     State("datasets", "data")
 )
-def update_filters(team_filter_values, driver_filter_values, datasets):
+def update_filters(team_filter_values, driver_filter_values, track_split_value, clean_laps_value, datasets):
 
     if datasets is not None:
         caller = callback_context.triggered[0]["prop_id"].split(".")[0]
 
          # Top level filters
-        if caller in ["team_filter_dropdown", "driver_filter_dropdown"]:
-
-            # TODO: Clear filtered drivers if they're not in filtered teams
+        if caller in ["team_filter_dropdown", "driver_filter_dropdown", "track_split_selector", "clean_laps_checkbox"]:
 
             top_filters = {}
+
+            # Team and driver filters
+            original_driver_filter_values = driver_filter_values
             if team_filter_values is not None and len(team_filter_values) > 0: top_filters["TeamName"] = team_filter_values
+            team_filter_values_output = no_update
+            if caller == "team_filter_dropdown":
+                # Remove any filtered drivers that are not in currently filtered teams
+                if driver_filter_values is not None and len(driver_filter_values) > 0:
+                    valid_drivers = list(visuals.filter_data(datasets["session_drivers"], [top_filters])["RacingNumber"])
+                    driver_filter_values = [i for i in driver_filter_values if i in valid_drivers]
+            driver_filter_values_output = driver_filter_values if driver_filter_values != original_driver_filter_values else no_update
             if driver_filter_values is not None and len(driver_filter_values) > 0: top_filters["Driver"] = driver_filter_values
 
+            # Split selector
+            top_filters["track_split"] = [track_split_value]
+
+            # Clean laps
+            top_filters["CleanLap"] = [clean_laps_value]
+
+            # Lower filters
             crossfilters = {} # Clear crossfilters on top filter change to avoid orphaned filtering, e.g. crossfiltering a lap for an unfiltered driver
             time_filters = no_update
 
     else:
-        # Create empty dictionaries when no dataset has been loaded yet
-        top_filters = {}
+        # Create default / empty dictionaries when no dataset has been loaded yet
+        top_filters = {
+            "track_split": ["sectors"],
+            "CleanLap": [True]
+        }
         crossfilters = {}
         time_filters = {}
+        team_filter_values_output = no_update
+        driver_filter_values_output = no_update
+
 
     return (
         top_filters,
         crossfilters,
-        time_filters
+        time_filters,
+        team_filter_values_output,
+        driver_filter_values_output
     )
 
 
@@ -333,6 +360,7 @@ def update_filters(team_filter_values, driver_filter_values, datasets):
     Output("track_map", "figure"),
     Output("stint_graph", "figure"),
     Output("inputs_graph", "figure"),
+    Output("conditions_plot", "figure"),
     Input("datasets", "data"),
     Input("top_filters", "data"),
     Input("crossfilters", "data"),
@@ -359,6 +387,7 @@ def refresh_visuals(datasets, top_filters, crossfilters, time_filters, client_in
         track_map = visuals.build_track_map(data_dict, filters, client_is_mobile)
         stint_graph = visuals.build_stint_graph(data_dict, filters, client_is_mobile)
         inputs_graph = visuals.build_inputs_graph(data_dict, filters, client_is_mobile)
+        conditions_plot = visuals.build_conditions_plot(data_dict, client_is_mobile) if ~client_is_mobile else no_update
 
     # Updated crossfilters & time filters update only affected visuals
     if caller in ["crossfilters", "time_filters"]:
@@ -366,6 +395,7 @@ def refresh_visuals(datasets, top_filters, crossfilters, time_filters, client_in
         track_map = no_update
         stint_graph = no_update
         inputs_graph = no_update
+        conditions_plot = no_update
 
     # Hovering is very selective
 
@@ -374,7 +404,8 @@ def refresh_visuals(datasets, top_filters, crossfilters, time_filters, client_in
         lap_plot,
         track_map,
         stint_graph,
-        inputs_graph
+        inputs_graph,
+        conditions_plot
     )
 
 
