@@ -86,13 +86,12 @@ def initiate(client_info):
 @dash_app.callback(
     Output("parameters_panel", "is_open"),
     Input("open_parameters_button", "n_clicks"),
-    Input("close_parameters_button", "n_clicks"),
     Input("datasets", "data"),
     State("parameters_panel", "is_open"),
     State("selected_session", "data"),
     State("loaded_session", "data")
 )
-def open_close_parameters(open_click, close_click, datasets, is_open, selected_session, loaded_session):
+def open_close_parameters(open_click, datasets, is_open, selected_session, loaded_session):
 
     if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
         # Close having loaded new datasets
@@ -123,6 +122,7 @@ def open_close_parameters(open_click, close_click, datasets, is_open, selected_s
     Output("session_select", "value"),
     Output("team_filter_dropdown", "options"),
     Output("driver_filter_dropdown", "options"),
+    Output("compound_filter_dropdown", "options"),
     Input("open_parameters_button", "n_clicks"),
     Input("top_filters", "data"),
     State("events_and_sessions", "data"),
@@ -156,14 +156,16 @@ def populate_parameters(click, top_filters, events_and_sessions, selected_sessio
         # Populate selected session into input
         session_value = loaded_session_name
 
-    # Team & driver filters
+    # Team, driver & compound filters
     if datasets is None:
         team_options = no_update
         driver_options = no_update
+        compound_options = no_update
     else:
         session_drivers = datasets["session_drivers"]
         team_options = visuals.get_filter_options(session_drivers, top_filters, ("TeamName", "TeamName"), ["TeamName", "Driver"])
         driver_options = visuals.get_filter_options(session_drivers, top_filters, ("Tla", "RacingNumber"), ["Driver"])
+        compound_options = visuals.get_filter_options(datasets["lap_times"], [], ("Compound", "Compound"))
     
     return (
         events_list,
@@ -171,14 +173,15 @@ def populate_parameters(click, top_filters, events_and_sessions, selected_sessio
         sessions_list,
         session_value,
         team_options,
-        driver_options
+        driver_options,
+        compound_options
     )
 
 
 # Toggle parameters panel close enable/disable, as well as loading indicator
 @dash_app.callback(
-    Output("close_parameters_button", "disabled"),
-    Output("spinner_col", "children"),
+    Output("parameters_panel", "backdrop"),
+    Output("load_button", "children"),
     Input("open_parameters_button", "n_clicks"),
     Input("selected_session", "data")
 )
@@ -186,17 +189,17 @@ def lock_panel_on_loading(open_parameters_button, selected_session):
     caller = callback_context.triggered[0]["prop_id"].split(".")[0]
     if caller == "open_parameters_button":
         return (
-            False,
-            None
+            True,
+            "Load new session"
         )
     elif caller == "selected_session":
         return (
-            True,
-            dbc.Spinner(color="primary")
+            "static",
+            [dbc.Spinner(color="warning", size="sm"), " Please wait..."]
         )
     else:
         return (
-            True,
+            "static",
             no_update
         )
 
@@ -288,50 +291,75 @@ def refresh_heading(datasets, events_and_sessions, selected_session):
     )
 
 
-# Update filters
+# Open timeline
+# Force conditions_plot sizing here? Keeps expanding unpredictably
+@dash_app.callback(
+    Output("conditions_panel", "is_open"),
+    Output("conditions_plot", "style"),
+    Input("open_conditions_button", "n_clicks"),
+    State("client_info", "data")
+)
+def open_conditions_panel(click, client_info):
+    if click is not None:
+        return (
+            True,
+            {"height": 250}
+        )
+    else:
+        return (
+            False,
+            {}
+        )
+
+
+# Update each filter level in its own callback. 
+# This is necessary because no_update can't be used with dcc.Store, so would trigger unnecessary outputs.
+
+# Top filters
 @dash_app.callback(
     Output("top_filters", "data"),
-    Output("crossfilters", "data"),
-    Output("time_filters", "data"),
     Output("team_filter_dropdown", "value"),
     Output("driver_filter_dropdown", "value"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
+    Input("compound_filter_dropdown", "value"),
     Input("track_split_selector", "value"),
     Input("clean_laps_checkbox", "value"),
     State("datasets", "data")
 )
-def update_filters(team_filter_values, driver_filter_values, track_split_value, clean_laps_value, datasets):
-
+def update_top_filters(
+    team_filter_values,
+    driver_filter_values,
+    compound_filter_values,
+    track_split_value,
+    clean_laps_value,
+    datasets
+):
     if datasets is not None:
         caller = callback_context.triggered[0]["prop_id"].split(".")[0]
+        top_filters = {}
 
-         # Top level filters
-        if caller in ["team_filter_dropdown", "driver_filter_dropdown", "track_split_selector", "clean_laps_checkbox"]:
+        # Team and driver filters
+        original_driver_filter_values = driver_filter_values
+        if team_filter_values is not None and len(team_filter_values) > 0: 
+            top_filters["TeamName"] = team_filter_values
+        team_filter_values_output = no_update
+        if caller == "team_filter_dropdown":
+            # Remove any filtered drivers that are not in currently filtered teams
+            if driver_filter_values is not None and len(driver_filter_values) > 0:
+                valid_drivers = list(visuals.filter_data(datasets["session_drivers"], [top_filters])["RacingNumber"])
+                driver_filter_values = [i for i in driver_filter_values if i in valid_drivers]
+        driver_filter_values_output = driver_filter_values if driver_filter_values != original_driver_filter_values else no_update
+        if driver_filter_values is not None and len(driver_filter_values) > 0: top_filters["Driver"] = driver_filter_values
 
-            top_filters = {}
+        # Compound filter
+        if compound_filter_values is not None and len(compound_filter_values) > 0: top_filters["Compound"] = compound_filter_values
 
-            # Team and driver filters
-            original_driver_filter_values = driver_filter_values
-            if team_filter_values is not None and len(team_filter_values) > 0: top_filters["TeamName"] = team_filter_values
-            team_filter_values_output = no_update
-            if caller == "team_filter_dropdown":
-                # Remove any filtered drivers that are not in currently filtered teams
-                if driver_filter_values is not None and len(driver_filter_values) > 0:
-                    valid_drivers = list(visuals.filter_data(datasets["session_drivers"], [top_filters])["RacingNumber"])
-                    driver_filter_values = [i for i in driver_filter_values if i in valid_drivers]
-            driver_filter_values_output = driver_filter_values if driver_filter_values != original_driver_filter_values else no_update
-            if driver_filter_values is not None and len(driver_filter_values) > 0: top_filters["Driver"] = driver_filter_values
+        # Split selector
+        top_filters["track_split"] = [track_split_value]
 
-            # Split selector
-            top_filters["track_split"] = [track_split_value]
-
-            # Clean laps
-            top_filters["CleanLap"] = [clean_laps_value]
-
-            # Lower filters
-            crossfilters = {} # Clear crossfilters on top filter change to avoid orphaned filtering, e.g. crossfiltering a lap for an unfiltered driver
-            time_filters = no_update
+        # Clean laps
+        top_filters["CleanLap"] = [clean_laps_value]
 
     else:
         # Create default / empty dictionaries when no dataset has been loaded yet
@@ -339,19 +367,82 @@ def update_filters(team_filter_values, driver_filter_values, track_split_value, 
             "track_split": ["sectors"],
             "CleanLap": [True]
         }
-        crossfilters = {}
-        time_filters = {}
         team_filter_values_output = no_update
         driver_filter_values_output = no_update
 
-
     return (
         top_filters,
-        crossfilters,
-        time_filters,
         team_filter_values_output,
         driver_filter_values_output
     )
+
+# Crossfilters
+@dash_app.callback(
+    Output("crossfilters", "data"),
+    Input("top_filters", "data"),
+    Input("lap_plot", "selectedData"),
+    Input("track_map", "selectedData"),
+    State("datasets", "data")
+)
+def update_crossfilters(
+    top_filters,
+    lap_plot_selection,
+    track_map_selection,
+    datasets
+):
+    if datasets is not None:
+        caller = callback_context.triggered[0]["prop_id"].split(".")[0]
+        caller_prop = callback_context.triggered[0]["prop_id"].split(".")[1]
+        if caller == "top_filters":
+            # Clear crossfilters on top filters change
+            crossfilters = {}
+        else:
+            # Start filter list from scratch each time
+            crossfilters = {}
+
+            # Lap plot selection
+            if lap_plot_selection is not None:
+                stint_ids = set()
+                lap_ids = set()
+                for point in lap_plot_selection["points"]:
+                    stint_ids.add(point["customdata"]["StintId"])
+                    lap_ids.add(point["customdata"]["LapId"])
+
+                # Note: Have to convert sets to lists to be JSON serializable for dcc.Store
+                crossfilters["StintId"] = list(stint_ids)
+                crossfilters["LapId"] = list(lap_ids)
+
+            # Track map selection
+            if track_map_selection is not None:
+                print(track_map_selection)
+
+    else:
+        crossfilters = {}
+
+    return crossfilters
+
+
+# Time filters
+@dash_app.callback(
+    Output("time_filters", "data"),
+    Input("conditions_plot", "selectedData"),
+    State("datasets", "data")
+)
+def update_time_filters(
+    conditions_plot_selection,
+    datasets
+):
+    if datasets is not None:
+        # Note: time filters unaffected by other top filters / crossfilters
+        # Only ever one time filter at most, could possibly allow many?
+        time_filters = {}
+        if conditions_plot_selection is not None:
+            range = conditions_plot_selection["range"]["x"]
+            time_filters["TimeFilter"] = (min(range), max(range))
+    else:
+        time_filters = {}
+
+    return time_filters
 
 
 # Update all four main visuals on dataset reload, filter update, or visual interation
@@ -365,37 +456,79 @@ def update_filters(team_filter_values, driver_filter_values, track_split_value, 
     Input("top_filters", "data"),
     Input("crossfilters", "data"),
     Input("time_filters", "data"),
-    State("client_info", "data")
+    State("client_info", "data"),
+    State("lap_plot", "figure"),
+    State("track_map", "figure"),
+    State("stint_graph", "figure"),
+    State("inputs_graph", "figure"),
+    State("conditions_plot", "figure")
 )
-def refresh_visuals(datasets, top_filters, crossfilters, time_filters, client_info):
+def refresh_visuals(
+    datasets, 
+    top_filters, 
+    crossfilters, 
+    time_filters, 
+    client_info,
+    lap_plot_state,
+    track_map_state,
+    stint_graph_state,
+    inputs_graph_state,
+    conditions_plot_state
+):
 
     # Ascertain which input has triggered this callback
+    # Might have to handle multiple callers at once?
     caller = callback_context.triggered[0]["prop_id"].split(".")[0]
+
+    data_dict = datasets
+    filters = [
+            top_filters,
+            crossfilters,
+            time_filters
+        ]
+    print("filters: -> " + str(filters))
 
 
     # Updated dataset triggers rebuild of all visuals
     # Updated top level filters also rebuilds all visuals except conditions plot?
     if caller in ["datasets", "top_filters",  ""]:
-        data_dict = datasets
-        filters = [
-            top_filters,
-            crossfilters,
-            time_filters
-        ]
-        client_is_mobile = client_info["isMobile"]
-        lap_plot = visuals.build_lap_plot(data_dict, filters, client_is_mobile)
-        track_map = visuals.build_track_map(data_dict, filters, client_is_mobile)
-        stint_graph = visuals.build_stint_graph(data_dict, filters, client_is_mobile)
-        inputs_graph = visuals.build_inputs_graph(data_dict, filters, client_is_mobile)
-        conditions_plot = visuals.build_conditions_plot(data_dict, client_is_mobile) if ~client_is_mobile else no_update
+        lap_plot = visuals.build_lap_plot(data_dict, filters, client_info)
+        track_map = visuals.build_track_map(data_dict, filters, client_info)
+        stint_graph = visuals.build_stint_graph(data_dict, filters, client_info)
+        inputs_graph = visuals.build_inputs_graph(data_dict, filters, client_info)
+        conditions_plot = visuals.build_conditions_plot(data_dict, client_info) if caller == "datasets" and ~client_info["isMobile"] else no_update
 
-    # Updated crossfilters & time filters update only affected visuals
-    if caller in ["crossfilters", "time_filters"]:
+    # Updated crossfilters update only affected visuals
+    if caller == "crossfilters":
+        crossfilter_fields = crossfilters.keys()
+
         lap_plot = no_update
-        track_map = no_update
-        stint_graph = no_update
+
+        if any(field in ["LapId"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
+            track_map = visuals.build_track_map(data_dict, filters, client_info)
+        else:
+            track_map = no_update
+
+        if any(field in ["StintId", "LapId"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
+            stint_graph = visuals.build_stint_graph(data_dict, filters, client_info)
+        else:
+            stint_graph = no_update
+
         inputs_graph = no_update
         conditions_plot = no_update
+
+    # Updated time filters only affect lap_plot and track_map
+    if caller == "time_filters":
+
+        lap_plot = visuals.build_lap_plot(data_dict, filters, client_info)
+        # What if e.g. LapId is now outside filtered timeframe?
+
+        track_map = visuals.build_track_map(data_dict, filters, client_info)
+        stint_graph = no_update
+        inputs_graph = no_update
+
+        conditions_plot = visuals.shade_conditions_plot(conditions_plot_state, filters)
+        
 
     # Hovering is very selective
 

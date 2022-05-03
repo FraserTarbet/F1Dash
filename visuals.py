@@ -2,7 +2,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 
-def get_figure(client_is_mobile):
+def get_figure(client_info):
     # Returns a consistent starting point for each visual
     fig = go.Figure()
     fig.update_layout(
@@ -15,11 +15,14 @@ def get_figure(client_is_mobile):
         clickmode="event+select"
     )
 
-    if client_is_mobile:
+    if client_info["isMobile"]:
         # Disable more functionality
         pass
     else:
         pass
+
+    client_height = client_info["height"]
+    # Dynamically size figure heights for screen sizes
 
     return fig
 
@@ -52,10 +55,10 @@ def filter_data(data, filter_dict_list, ignore=[]):
     # Loop through filters and filter dataframe by each
     for filter_dict in filter_dict_list:
         for field in filter_dict:
-            if field in ["TimeFrom", "TimeTo"]:
+            if field == "TimeFilter" and "SessionTime" in data.columns and field not in ignore:
                 # Handle time filtering here
-                if field not in ignore:
-                    pass
+                time_min, time_max = filter_dict[field]
+                data = data[(data["SessionTime"] >= time_min) & (data["SessionTime"] <= time_max)]
             else:
                 if field in data.columns and field not in ignore:
                     data = data[(data[field].isin(filter_dict[field]))]
@@ -78,7 +81,7 @@ def filter_values(filter_dict_list, filter):
     for filter_dict in filter_dict_list:
         if filter in filter_dict:
             return filter_dict[filter]
-    return None
+    return []
 
 
 def get_filter_options(data, top_filters_dict, return_fields_tuple, ignore=[]):
@@ -160,12 +163,12 @@ def get_time_axis_ticks(time_min, time_max):
     return tick_values, tick_labels
 
 
-def build_lap_plot(data_dict, filters, client_is_mobile):
+def build_lap_plot(data_dict, filters, client_info):
 
     # Plot of lap times, banded by team -> driver -> stint
     # Not filtered by laps or stints
 
-    fig = get_figure(client_is_mobile)
+    fig = get_figure(client_info)
 
     if data_dict is None:
         fig = empty_figure(fig)
@@ -186,7 +189,7 @@ def build_lap_plot(data_dict, filters, client_is_mobile):
         fig = empty_figure(fig)
         return fig
 
-    data = data.groupby(["TeamOrder", "DriverOrder", "StintNumber", 
+    data = data.groupby(["TeamOrder", "DriverOrder", "StintId", "StintNumber", 
                          "LapsInStint", "LapId", "Compound", "Driver", 
                          "Tla", "TeamColour"])[time_field].sum().reset_index()
     
@@ -206,21 +209,24 @@ def build_lap_plot(data_dict, filters, client_is_mobile):
         "HARD": "rgba(150, 150, 150, 255)",
         "UNKNOWN": "rgba(0, 0, 0, 255)"
     }
-    data["colour_compound"] = data["Compound"].apply(lambda x: compound_colour[x])
-
+ 
     # Plot times
-    fig.add_trace(
-        go.Scatter(
-            x=data.index,
-            y=data[time_field],
-            mode="markers",
-            marker_color=data["colour_compound"],
-            marker_line_width=1,
-            marker_line_color="rgb(0, 0, 0)",
-            hoverinfo="text",
-            hovertext=data["text"]
+    for compound in list(data["Compound"].unique()):
+        trace_data = data[(data["Compound"] == compound)]
+        fig.add_trace(
+            go.Scatter(
+                x=trace_data.index,
+                y=trace_data[time_field],
+                mode="markers",
+                marker_color=compound_colour[compound],
+                marker_line_width=1,
+                marker_line_color="rgb(0, 0, 0)",
+                hoverinfo="text",
+                hovertext=trace_data["text"],
+                customdata=trace_data[["StintId", "LapId"]].to_dict("records"),
+                name=compound
+            )
         )
-    )
 
     # Band by team colours and add X axis labels
     tick_values = []
@@ -262,26 +268,139 @@ def build_lap_plot(data_dict, filters, client_is_mobile):
         gridcolor="rgb(0, 0, 0)"
     )
 
+    fig.update_layout(
+        showlegend=False
+    )
+
     return fig
 
 
-def build_track_map(data_dict, filters, client_is_mobile):
+def build_track_map(data_dict, filters, client_info):
 
     # Fastest driver per sector or zone, or brake/gear per sector or zone
     # Not filtered by sector or zone
 
-    fig = get_figure(client_is_mobile)
+    fig = get_figure(client_info)
+
+    if data_dict is None:
+        fig = empty_figure(fig)
+        return fig
+
+    data = data_dict["position_data"].copy()
+
+    data = filter_data(data, filters)
+
+    if len(data) == 0:
+        fig = empty_figure(fig)
+        return fig
+
+    if len(filter_values(filters, "LapId")) == 1:
+        # Braking and gear changes
+        chart_data = data[["LapId", "SessionTime", "X", "Y", "BrakeOrGearId", "BrakeOrGear", "CarSampleId"]]
+        trace_ids = list(chart_data["BrakeOrGearId"].unique())
+
+        colours = {
+            -1: "rgb(255, 0, 0)",
+            0: "rgb(30, 30, 30)",
+            1: "rgb(60, 60, 60)",
+            2: "rgb(90, 90, 90)",
+            3: "rgb(120, 120, 120)",
+            4: "rgb(150, 150, 150)",
+            5: "rgb(180, 180, 180)",
+            6: "rgb(210, 210, 210)",
+            7: "rgb(230, 230, 230)",
+            8: "rgb(255, 255, 255)",
+        }
+
+        for brake_or_gear_id in trace_ids:
+            trace_data = chart_data[(chart_data["BrakeOrGearId"] == brake_or_gear_id)].copy()
+            trace_data.sort_values("SessionTime", inplace=True)
+            fig.add_trace(
+                go.Scatter(
+                    x=trace_data["X"],
+                    y=trace_data["Y"],
+                    mode="lines+markers",
+                    marker_size=0.5,
+                    marker_color=colours[trace_data["BrakeOrGear"].iloc[0]],
+                    hoverinfo="text",
+                    hovertext="Brake" if trace_data["BrakeOrGear"].iloc[0] == -1 else "Gear " + str(trace_data["BrakeOrGear"].iloc[0]),
+                    line_width=5,
+                    line_shape="spline",
+                    customdata=trace_data[["LapId", "CarSampleId"]].to_dict("records") 
+                    # Use time since start of lap instead of sample id?
+                )
+            )
+
+    else:
+        # Fastest driver per zone/sector
+        track_map = data_dict["track_map"]
+
+        if filter_values(filters, "track_split")[0] == "zones":
+            section_times = data_dict["zone_times"]
+            section_identifier = "ZoneNumber"
+            time_identifier = "ZoneTime"
+        else:
+            section_times = data_dict["sector_times"]
+            section_identifier = "SectorNumber"
+            time_identifier = "SectorTime"
+
+        section_times = filter_data(section_times, filters, ignore=["SectorNumber", "ZoneNumber"])
+        
+        section_times.reset_index(drop=True, inplace=True)
+        sections = list(section_times[section_identifier].unique())
+
+        for section in sections:
+            index_min = section_times[(section_times[section_identifier] == section)][time_identifier].idxmin()
+            Tla = section_times["Tla"].iloc[index_min]
+            colour = "#" + section_times["TeamColour"].iloc[index_min]
+            track = track_map[(track_map[section_identifier]) == section].copy()
+            track.sort_values("SampleId", inplace=True)
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=track["X"],
+                    y=track["Y"],
+                    mode="lines+markers",
+                    marker_size=0.5,
+                    hoverinfo="text",
+                    hovertext=Tla, # Show time deltas?
+                    marker_color=colour,
+                    line_width=5,
+                    line_shape="spline"
+                    # Make custom data sector / zone number, for crossfiltering (and highlighting on inputs?)
+                )
+            )
+
+    # Extend X & Y axes a bit to fit whole map, also hide them
+    xmin = data["X"].min()
+    xmax = data["X"].max()
+    ymin = data["Y"].min()
+    ymax = data["Y"].max()
+    x_centre = (xmin + xmax) / 2
+    y_centre = (ymin + ymax) / 2
+    axis_length = max(xmax - xmin, ymax - ymin)
+    axis_length = axis_length * 1.05
+    
+    fig.update_xaxes(
+        range=[x_centre - axis_length / 2, x_centre + axis_length / 2],
+        visible=False
+    )
+    
+    fig.update_yaxes(
+        range=[y_centre - axis_length / 2, y_centre + axis_length / 2],
+        visible=False
+    )
 
     return fig
 
 
-def build_stint_graph(data_dict, filters, client_is_mobile):
+def build_stint_graph(data_dict, filters, client_info):
 
     # Lap/zone/sector times per driver over the session, or lap/zone/sector times per unique stint over stint laps
     # Not filtered by laps
     # Doesn't drive any crossfiltering
 
-    fig = get_figure(client_is_mobile)
+    fig = get_figure(client_info)
 
     if data_dict is None:
         fig = empty_figure(fig)
@@ -317,7 +436,7 @@ def build_stint_graph(data_dict, filters, client_is_mobile):
         )
     
     # Trace per driver or stint
-    stint_filtering = filter_exists(filters, "StintId")
+    stint_filtering = filter_exists(filters, "StintId") or filter_exists(filters, "Compound")
     if stint_filtering:
         x_field = "LapsInStint"
         x_title = "Stint Lap"
@@ -360,8 +479,8 @@ def build_stint_graph(data_dict, filters, client_is_mobile):
 
     # Markers for crossfiltered laps
     filter_lap_ids = filter_values(filters, "LapId")
-    if filter_lap_ids is not None:
-        for lap_id in filter_lap_ids["LapId"]:
+    if len(filter_lap_ids) > 0:
+        for lap_id in filter_lap_ids:
             if lap_id in list(data["LapId"]):
                 trace_data = data[(data["LapId"]) == lap_id]
                 colour = "#" + trace_data["TeamColour"].iloc[0]
@@ -397,25 +516,27 @@ def build_stint_graph(data_dict, filters, client_is_mobile):
     return fig
 
 
-def build_inputs_graph(data_dict, filters, client_is_mobile):
+def build_inputs_graph(data_dict, filters, client_info):
 
     # Car inputs over time for a maximum of two laps
 
-    fig = get_figure(client_is_mobile)
+    fig = get_figure(client_info)
 
     return fig
 
 
-def build_conditions_plot(data_dict, client_is_mobile):
+def build_conditions_plot(data_dict, client_info):
 
     # Weather, track status, and track activity over total session time
     # Not crossfiltered by anything
 
-    fig = get_figure(client_is_mobile)
+    fig = get_figure(client_info)
     fig.update_layout(
         bargap=0,
         showlegend=False,
-        selectdirection="h"
+        selectdirection="h",
+        clickmode="event",
+        selectionrevision=False
     )
 
     if data_dict is None:
@@ -553,8 +674,43 @@ def build_conditions_plot(data_dict, client_is_mobile):
     )
 
     fig.update_layout(
-        margin={"l":100, "r":100, "t":0, "b":0},
-        height=200
+        margin={"l":100, "r":100, "t":0, "b":0}
     )
 
     return fig
+
+
+def shade_conditions_plot(figure_state, filters):
+    
+    # Takes session time tuple from relayoutData xaxis.range output and draws vrects either side
+
+    # Build fig from existing dict, clear any existing shapes
+    fig = go.Figure(figure_state)
+    fig.layout.shapes = []
+
+    print(type(fig))
+
+    # Get time filter values
+    filter_min_max = filter_values(filters, "TimeFilter")
+    if len(filter_min_max) == 0:
+        return fig
+
+    filter_min, filter_max = (filter_min_max[0], filter_min_max[1])
+
+    # Get session min and max times from arrays within fig (doesn't seem to be possible to get these from any simple fig.prop)
+    x_values = figure_state["data"][0]["x"]
+    x_min, x_max = (x_values[0], x_values[-1])
+
+    # Draw shapes
+    for x_values in [(x_min, filter_min), (filter_max, x_max)]:
+        fig.add_vrect(
+            x0=x_values[0],
+            x1=x_values[1],
+            fillcolor="rgb(175, 175, 175)",
+            opacity=0.5,
+            layer="above",
+            line_width=0
+        )
+
+    return fig
+    

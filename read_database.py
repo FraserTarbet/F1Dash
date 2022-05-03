@@ -58,12 +58,12 @@ def read_session_data(event_id, session_name, use_test_data):
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
 
     sp_dict = {
-        # "position_data": "PositionData",
-        # "car_data": "CarData",
-        # "track_map": "TrackMap",
+        "position_data": "PositionData",
+        "car_data": "CarData",
+        "track_map": "TrackMap",
         "lap_times": "LapTimes",
-        # "sector_times": "SectorTimes",
-        # "zone_times": "ZoneTimes",
+        "sector_times": "SectorTimes",
+        "zone_times": "ZoneTimes",
         "conditions_data": "ConditionsData",
         "session_drivers": "SessionDrivers"
     }

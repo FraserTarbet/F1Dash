@@ -13,8 +13,7 @@ desktop = [
         children=[
             dbc.Row(
                 [
-                    dbc.Col(html.H3("F1Dash"), lg=9),
-                    dbc.Col(dbc.Button(id="close_parameters_button", children="Close"), lg=3)
+                    dbc.Col(html.H3("F1Dash"), lg=12)
                 ],
                 justify="end"
             ),
@@ -41,8 +40,7 @@ desktop = [
             )
             ,dbc.Row(
                 [
-                    dbc.Col(dbc.Button("Load session", id="load_button"), lg=6),
-                    dbc.Col(id="spinner_col")
+                    dbc.Col(dbc.Button(children=["Load session"], id="load_button"), lg=6),
                 ],
                 align="center",
                 justify="start",
@@ -76,6 +74,12 @@ desktop = [
                 ],
                 align="center",
                 style={"margin-bottom": "5px"}
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.Label("Compounds:"), lg=3),
+                    dbc.Col(dcc.Dropdown(id="compound_filter_dropdown", multi=True), lg=9)
+                ]
             ),
             dbc.Row(
                 [
@@ -125,28 +129,28 @@ desktop = [
     ),
     dbc.Row(
         [
-            dbc.Col(dbc.Button(id="open_conditions_button", children="Session overview"), lg=2),
-            dbc.Col(lg=10)
+            dbc.Col(dbc.Button(id="open_conditions_button", children="Open timeline"), lg=1),
         ],
-        align="center"
+        align="center",
+        justify="center"
     ),
     dbc.Offcanvas(
         id="conditions_panel",
-        is_open=True,
+        is_open=False,
         close_button=False,
         scrollable=True,
         placement="bottom",
-        style={"height": 250},
-        # children=[
-        #     dbc.Row(
-        #         [
-        #             dbc.Col(dcc.Graph(id="conditions_plot", config={"displayModeBar": False}))
-        #         ],
-        #         align="start",
-        #         justify="center"
-        #     )
-        # ]
-        children=dcc.Graph(id="conditions_plot", config={"displayModeBar": False})
+        style={"height": 300},
+        children=[
+            dbc.Row(
+                [
+                    dbc.Col(html.P("Blah blah blah blah blah blah blah blah blah blah blah blah blah"), lg=2),
+                    dbc.Col(dcc.Graph(id="conditions_plot", config={"displayModeBar": False, "responsive": False}), lg=10)
+                ],
+                align="start",
+                justify="center"
+            )
+        ]
     )
 ]
 
