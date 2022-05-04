@@ -50,48 +50,46 @@ def empty_figure(fig, text="No data"):
     return fig
 
 
-def filter_data(data, filter_dict_list, ignore=[]):
+def filter_data(data, filter_dict, ignore=[]):
 
     # Loop through filters and filter dataframe by each
-    for filter_dict in filter_dict_list:
-        for field in filter_dict:
-            if field == "TimeFilter" and "SessionTime" in data.columns and field not in ignore:
-                # Handle time filtering here
-                time_min, time_max = filter_dict[field]
-                data = data[(data["SessionTime"] >= time_min) & (data["SessionTime"] <= time_max)]
-            else:
-                if field in data.columns and field not in ignore:
-                    data = data[(data[field].isin(filter_dict[field]))]
+    for field in filter_dict:
+        if field == "TimeFilter" and "SessionTime" in data.columns and field not in ignore:
+            # Handle time filtering here
+            time_min, time_max = filter_dict[field]
+            data = data[(data["SessionTime"] >= time_min) & (data["SessionTime"] <= time_max)]
+        else:
+            if field in data.columns and field not in ignore:
+                data = data[(data[field].isin(filter_dict[field]))]
 
     return data
 
 
-def filter_exists(filter_dict_list, filter):
+def filter_exists(filter_dict, filter):
 
     # Determine whether a filter exists for a given field. Used to work out e.g. whether to use sector- or zone-level dataset.
-    for filter_dict in filter_dict_list:
-        if filter in filter_dict:
+    if filter in filter_dict:
             return True
     return False
 
 
-def filter_values(filter_dict_list, filter):
+def filter_values(filter_dict, filter):
 
     # Return values for a given filter
-    for filter_dict in filter_dict_list:
-        if filter in filter_dict:
-            return filter_dict[filter]
-    return []
+    if filter in filter_dict:
+        return filter_dict[filter]
+    else:
+        return []
 
 
-def get_filter_options(data, top_filters_dict, return_fields_tuple, ignore=[]):
+def get_filter_options(data, filter_dict, return_fields_tuple, ignore=[]):
 
     # Get valid filter options based on existing top-level filters. Used by filters, not data visuals.
     # Returns a list of dicts in shape [{label: value}] for multi-select dropdowns
 
-    for field in top_filters_dict:
+    for field in filter_dict:
         if field in data.columns and field not in ignore:
-            data = data[(data[field].isin(top_filters_dict[field]))]
+            data = data[(data[field].isin(filter_dict[field]))]
 
     label_field, value_field = return_fields_tuple
     if label_field == value_field:
@@ -296,16 +294,20 @@ def build_track_map(data_dict, filters, client_info):
         fig = empty_figure(fig)
         return fig
 
-    data = data_dict["position_data"].copy()
-
-    data = filter_data(data, filters, ignore=["SectorNumber", "ZoneNumber"])
-
-    if len(data) == 0:
-        fig = empty_figure(fig)
-        return fig
+    x_min = 0
+    x_max = 0
+    y_min = 0
+    y_max = 0
 
     if len(filter_values(filters, "LapId")) == 1:
         # Braking and gear changes
+        data = data_dict["position_data"].copy()
+
+        data = filter_data(data, filters, ignore=["SectorNumber", "ZoneNumber"])
+
+        if len(data) == 0:
+            fig = empty_figure(fig)
+            return fig
         chart_data = data[["LapId", "SessionTime", "X", "Y", "BrakeOrGearId", "BrakeOrGear", "CarSampleId"]]
         trace_ids = list(chart_data["BrakeOrGearId"].unique())
 
@@ -339,6 +341,11 @@ def build_track_map(data_dict, filters, client_info):
                     customdata=trace_data[["LapId", "SessionTime"]].to_dict("records") 
                 )
             )
+
+        x_min = data["X"].min()
+        x_max = data["X"].max()
+        y_min = data["Y"].min()
+        y_max = data["Y"].max()
 
     else:
         # Fastest driver per zone/sector
@@ -399,14 +406,15 @@ def build_track_map(data_dict, filters, client_info):
                 )
             )
 
+            x_min = track_map["X"].min()
+            x_max = track_map["X"].max()
+            y_min = track_map["Y"].min()
+            y_max = track_map["Y"].max()
+
     # Extend X & Y axes a bit to fit whole map, also hide them
-    xmin = data["X"].min()
-    xmax = data["X"].max()
-    ymin = data["Y"].min()
-    ymax = data["Y"].max()
-    x_centre = (xmin + xmax) / 2
-    y_centre = (ymin + ymax) / 2
-    axis_length = max(xmax - xmin, ymax - ymin)
+    x_centre = (x_min + x_max) / 2
+    y_centre = (y_min + y_max) / 2
+    axis_length = max(x_max - x_min, y_max - y_min)
     axis_length = axis_length * 1.05
     
     fig.update_xaxes(
