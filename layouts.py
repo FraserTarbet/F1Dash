@@ -117,7 +117,7 @@ desktop = [
     dbc.Row(
         [
             dbc.Col(dcc.Graph(id="lap_plot", config={"displayModeBar": False}), lg=8),
-            dbc.Col(dcc.Graph(id="track_map", config={"displayModeBar": False}), lg=4)
+            dbc.Col(dcc.Graph(id="track_map", config={"displayModeBar": False}, clear_on_unhover=True), lg=4)
         ],
         align="center", justify="evenly"
     ),

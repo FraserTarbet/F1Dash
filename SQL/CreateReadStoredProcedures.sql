@@ -318,6 +318,7 @@ BEGIN
 		SessionName = @SessionName
 		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 	)
+	AND Z.ZoneTime > 0 -- Filter out crazy times from first lap - think it's caused by cars moving around prior to race.
 
 	ORDER BY D.TeamOrder ASC
 	,D.DriverOrder ASC

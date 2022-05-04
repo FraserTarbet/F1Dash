@@ -414,7 +414,13 @@ def update_crossfilters(
 
             # Track map selection
             if track_map_selection is not None:
-                print(track_map_selection)
+                filter_field = list(track_map_selection["points"][0]["customdata"].keys())[0]
+                if filter_field in ["ZoneNumber", "SectorNumber"]:
+                    filter_values = set()
+                    for point in track_map_selection["points"]:
+                        filter_values.add(point["customdata"][filter_field])
+
+                    crossfilters[filter_field] = list(filter_values)
 
     else:
         crossfilters = {}
@@ -502,19 +508,27 @@ def refresh_visuals(
     if caller == "crossfilters":
         crossfilter_fields = crossfilters.keys()
 
-        lap_plot = no_update
+        if any(field in ["SectorNumber", "ZoneNumber", "LapId"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
+            lap_plot = visuals.build_lap_plot(data_dict, filters, client_info)
+        else:
+            lap_plot = no_update
 
-        if any(field in ["LapId"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
+        if any(field in ["LapId", "SectorNumber", "ZoneNumber"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
             track_map = visuals.build_track_map(data_dict, filters, client_info)
         else:
             track_map = no_update
 
-        if any(field in ["StintId", "LapId"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
+        if any(field in ["StintId", "LapId", "SectorNumber", "ZoneNumber"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
             stint_graph = visuals.build_stint_graph(data_dict, filters, client_info)
         else:
             stint_graph = no_update
 
-        inputs_graph = no_update
+        if any(field in ["LapId", "SectorNumber", "ZoneNumber"] for field in crossfilter_fields) or len(crossfilter_fields) == 0:
+            inputs_graph = visuals.build_inputs_graph(data_dict, filters, client_info)
+        else:
+            inputs_graph = no_update
+
+
         conditions_plot = no_update
 
     # Updated time filters only affect lap_plot and track_map
@@ -529,9 +543,22 @@ def refresh_visuals(
 
         conditions_plot = visuals.shade_conditions_plot(conditions_plot_state, filters)
         
+    # Too slow
+    # # Hovering is very selective
+    # if caller == "track_map" and callback_context.triggered[0]["prop_id"].split(".")[1] == "hoverData":
+    #     if track_map_hover is not None:
+    #         if "SessionTime" in track_map_hover["points"][0]["customdata"]:
+    #             session_time = track_map_hover["points"][0]["customdata"]["SessionTime"]
+    #             inputs_graph = visuals.add_line_to_inputs_graph(inputs_graph_state, session_time)
+    #         else:
+    #             inputs_graph = visuals.add_line_to_inputs_graph(inputs_graph_state, None)
+    #     else:
+    #         inputs_graph = visuals.add_line_to_inputs_graph(inputs_graph_state, None)
 
-    # Hovering is very selective
-
+    #     lap_plot = no_update
+    #     track_map = no_update
+    #     stint_graph = no_update
+    #     conditions_plot = no_update
 
     return (
         lap_plot,

@@ -1015,6 +1015,67 @@ BEGIN
 END
 GO
 
+-- Replacing this version with following proc
+
+--DROP PROCEDURE IF EXISTS dbo.Merge_Zone
+--GO
+--CREATE PROCEDURE dbo.Merge_Zone @SessionId INT
+--AS
+--BEGIN
+
+--	/*
+--		Creates zone time records in same shape as sector times.
+--		Zone time calculated using first sample time in zone and first sample in following zone.
+--		Jitter in sample data means these times should be treated with caution, and will be particularly erratic for short zones.
+
+--		Run after telemetry has been merged with track zones etc.
+--	*/
+
+--	-- Clear existing records for this session
+--	DELETE Z
+--	FROM dbo.Zone AS Z
+--	INNER JOIN dbo.MergedLapData AS L
+--	ON Z.LapId = L.LapId
+--	WHERE L.SessionId = @SessionId
+
+--	-- Insert new records
+--	INSERT INTO dbo.Zone(
+--		LapId
+--		,ZoneNumber
+--		,ZoneTime
+--		,ZoneSessionTime
+--	)
+--	SELECT LapId
+--		,ZoneNumber
+--		,LEAD(MinZoneTime, 1, MaxZoneTime) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) - MinZoneTime AS ZoneTime
+--		,LEAD(MinZoneTime, 1, MaxZoneTime) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) AS ZoneSessionTime
+
+--	FROM (
+
+--		SELECT L.LapId
+--			,L.Driver
+--			,L.NumberOfLaps
+--			,T.ZoneNumber
+--			,MIN([Time]) AS MinZoneTime
+--			,MAX([Time]) AS MaxZoneTime
+
+--		FROM dbo.MergedTelemetry AS T
+
+--		INNER JOIN dbo.MergedLapData AS L
+--		ON T.LapId = L.LapId
+
+--		WHERE T.SessionId = @SessionId
+
+--		GROUP BY L.LapId
+--			,L.Driver
+--			,L.NumberOfLaps
+--			,T.ZoneNumber
+
+--	) AS A
+
+--END
+--GO
+
 
 DROP PROCEDURE IF EXISTS dbo.Merge_Zone
 GO
@@ -1024,11 +1085,234 @@ BEGIN
 
 	/*
 		Creates zone time records in same shape as sector times.
-		Zone time calculated using first sample time in zone and first sample in following zone.
-		Jitter in sample data means these times should be treated with caution, and will be particularly erratic for short zones.
+		Use zone start/end samples and then interpolate the time at which each driver reached that point on track.
+		Not hugely precise, but should be a better guide than using the first/last raw samples which are every ~250ms, +/- jitter.
 
 		Run after telemetry has been merged with track zones etc.
 	*/
+
+	DECLARE @EventId INT
+		,@ZoneCount INT
+		,@DistanceThreshold INT = 1000 -- Max 100m search for nearest samples
+		,@SearchRadius INT
+		,@NullCount INT
+
+
+	SET @EventId = (
+		SELECT EventId
+
+		FROM dbo.Session
+
+		WHERE id = @SessionId
+	)
+
+
+	SET @ZoneCount = (SELECT MAX(ZoneNumber) FROM dbo.TrackMap WHERE EventId = @EventId)
+
+
+	-- Get divisions between zones from track map
+	;WITH ZoneStarts AS (
+		SELECT *
+			,ROW_NUMBER() OVER(PARTITION BY ZoneNumber ORDER BY SampleId ASC) AS ZoneRN
+			,ATN2(
+				LEAD(X, 1) OVER(ORDER BY SampleId ASC) - X
+				,LEAD(Y, 1) OVER(ORDER BY SampleId ASC) -Y
+			) AS Theta
+			 
+		FROM dbo.TrackMap
+
+		WHERE EventId = @EventId
+	)
+	, ZoneBreaks AS (
+		SELECT ZoneNumber
+			,X
+			,Y
+			,DEGREES(
+				CASE
+					WHEN Theta < 0 THEN Theta + 2 * PI()
+					ELSE Theta
+				END
+			) AS HeadingDegrees
+		FROM ZoneStarts
+		WHERE ZoneRN = 1
+	)
+	SELECT *
+	INTO #ZoneBreaks
+	FROM ZoneBreaks
+
+
+	/*
+		Get position samples immediately before and after zone breaks.
+		Watch out for last sample of lap actually being assigned to next lap in merged data and vice versa... Might happen?
+	*/
+
+	-- Table to track samples still to find
+	CREATE TABLE #LapZones(
+		Driver INT
+		,LapId INT
+		,LapNumber INT
+		,ZoneNumber INT
+		,X INT
+		,Y INT
+		,HeadingDegrees FLOAT
+		,SampleBefore INT
+		,SampleAfter INT
+		,TimeBefore FLOAT
+		,TimeAfter FLOAT
+		,DistanceBefore FLOAT
+		,DistanceAfter FLOAT
+	)
+	INSERT INTO #LapZones(
+		Driver
+		,LapId
+		,LapNumber
+		,ZoneNumber
+		,X
+		,Y
+		,HeadingDegrees
+	)
+	SELECT DISTINCT T.Driver
+		,T.LapId
+		,L.NumberOfLaps
+		,T.ZoneNumber
+		,Z.X
+		,Z.Y
+		,Z.HeadingDegrees
+	FROM dbo.MergedTelemetry AS T
+
+	INNER JOIN dbo.Lap AS L
+	ON T.LapId = L.id
+
+	INNER JOIN #ZoneBreaks AS Z
+	ON T.ZoneNumber = Z.ZoneNumber
+
+	WHERE T.SessionId = @SessionId
+	AND T.[Source] = 'pos'
+	AND T.LapId IS NOT NULL 
+
+	CREATE CLUSTERED INDEX IndexLapIdZoneNumber ON #LapZones (LapId, ZoneNumber)
+
+
+	-- Incrementally increase search radius for nearest point before and after
+	SET @NullCount = (SELECT COUNT(*) FROM #LapZones WHERE SampleBefore IS NULL OR SampleAfter IS NULL)
+	SET @SearchRadius = 100
+
+	WHILE @NullCount > 0 AND @SearchRadius <= @DistanceThreshold
+	BEGIN
+
+		;WITH Search AS (
+			SELECT LZ.LapId
+				,LZ.ZoneNumber
+				,T.id AS SampleId
+				,T.[Time]
+				,CASE 
+					WHEN T.X = LZ.X AND T.Y = LZ.Y THEN NULL
+					ELSE ABS(DEGREES(ATN2(T.X - LZ.X, T.Y - LZ.Y)) - LZ.HeadingDegrees)
+				END AS HeadingDegreesFromBreakHeading
+				,SQRT(POWER(T.X - LZ.X, 2) + POWER(T.Y - LZ.Y, 2)) AS Distance
+
+			FROM #LapZones AS LZ
+
+			INNER JOIN dbo.MergedTelemetry AS T
+			ON LZ.Driver = T.Driver
+			AND LZ.LapId = T.LapId
+			AND LZ.X > T.X - @SearchRadius
+			AND LZ.X < T.X + @SearchRadius
+			AND LZ.Y > T.Y - @SearchRadius
+			AND LZ.Y < T.Y + @SearchRadius
+
+			WHERE T.LapId IS NOT NULL
+			AND T.SessionId = @SessionId
+			AND T.[Source] = 'pos'
+			AND (LZ.SampleBefore IS NULL OR LZ.SampleAfter IS NULL)
+
+		)
+		,Direction AS (
+			SELECT *
+				,CASE
+					WHEN HeadingDegreesFromBreakHeading IS NULL THEN 'After'
+					WHEN HeadingDegreesFromBreakHeading > 90 AND HeadingDegreesFromBreakHeading <= 270 THEN 'Before'
+					ELSE 'After'
+				END AS BeforeOrAfter
+			FROM Search
+		)
+		,Nearest AS (
+			SELECT *
+				,ROW_NUMBER() OVER(PARTITION BY LapId, ZoneNumber, BeforeOrAfter ORDER BY Distance ASC) AS RN
+
+			FROM Direction
+		)
+		SELECT *
+		INTO #Nearest
+		FROM Nearest
+
+
+		UPDATE LZ
+
+		SET LZ.SampleBefore = N.SampleId
+			,LZ.TimeBefore = N.[Time]
+			,LZ.DistanceBefore = N.Distance
+
+		FROM #LapZones AS LZ
+
+		LEFT JOIN #Nearest AS N
+		ON LZ.LapId = N.LapId
+		AND LZ.ZoneNumber = N.ZoneNumber
+
+		WHERE LZ.SampleBefore IS NULL
+		AND N.BeforeOrAfter = 'Before'
+		AND N.RN = 1
+
+
+		UPDATE LZ
+
+		SET LZ.SampleAfter = N.SampleId
+			,LZ.TimeAfter = N.[Time]
+			,LZ.DistanceAfter = N.Distance
+
+		FROM #LapZones AS LZ
+
+		LEFT JOIN #Nearest AS N
+		ON LZ.LapId = N.LapId
+		AND LZ.ZoneNumber = N.ZoneNumber
+
+		WHERE LZ.SampleAfter IS NULL
+		AND N.BeforeOrAfter = 'After'
+		AND N.RN = 1
+
+
+
+		DROP TABLE #Nearest
+
+		SET @NullCount = (SELECT COUNT(*) FROM #LapZones WHERE SampleBefore IS NULL OR SampleAfter IS NULL)
+		SET @SearchRadius = @SearchRadius + 100
+	END
+
+
+	-- Clear existing records for this session
+	DELETE Z
+	FROM dbo.Zone AS Z
+	INNER JOIN dbo.MergedLapData AS L
+	ON Z.LapId = L.LapId
+	WHERE L.SessionId = @SessionId
+
+
+	-- Use sample times either side to estimate time at which car passed zone break from track map
+	-- Insert into table
+	;WITH Interpolate AS (
+		SELECT * 
+			,ROUND(TimeBefore + (TimeAfter - TimeBefore) * (DistanceBefore / (DistanceBefore + DistanceAfter)), -6) AS InterpolatedTime
+
+		FROM #LapZones
+	)
+	,Times AS (
+		SELECT LapId
+			,ZoneNumber
+			,LEAD(InterpolatedTime, 1) OVER(PARTITION BY Driver ORDER BY LapNumber ASC, ZoneNumber ASC) - InterpolatedTime AS ZoneTime
+			,LEAD(InterpolatedTime, 1) OVER(PARTITION BY Driver ORDER BY LapNumber ASC, ZoneNumber ASC) AS ZoneSessionTime
+
+		FROM Interpolate
+	)
 
 	INSERT INTO dbo.Zone(
 		LapId
@@ -1038,31 +1322,13 @@ BEGIN
 	)
 	SELECT LapId
 		,ZoneNumber
-		,LEAD(MinZoneTime, 1, MaxZoneTime) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) - MinZoneTime AS ZoneTime
-		,LEAD(MinZoneTime, 1, MaxZoneTime) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) AS ZoneSessionTime
+		,ZoneTime
+		,ZoneSessionTime
 
-	FROM (
+	FROM Times
 
-		SELECT L.LapId
-			,L.Driver
-			,L.NumberOfLaps
-			,T.ZoneNumber
-			,MIN([Time]) AS MinZoneTime
-			,MAX([Time]) AS MaxZoneTime
 
-		FROM dbo.MergedTelemetry AS T
 
-		INNER JOIN dbo.MergedLapData AS L
-		ON T.LapId = L.LapId
-
-		WHERE T.SessionId = @SessionId
-
-		GROUP BY L.LapId
-			,L.Driver
-			,L.NumberOfLaps
-			,T.ZoneNumber
-
-	) AS A
+	DROP TABLE #ZoneBreaks, #LapZones
 
 END
-GO

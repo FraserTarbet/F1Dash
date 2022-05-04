@@ -27,10 +27,10 @@ def get_figure(client_info):
     return fig
 
 
-def empty_figure(fig):
+def empty_figure(fig, text="No data"):
     # Returns placeholder figure when no data is available (on initiate or when conflicting filters have been applied)
     fig.add_annotation(
-            text="No data",
+            text=text,
             xref="paper",
             yref="paper",
             x=0.5,
@@ -204,29 +204,39 @@ def build_lap_plot(data_dict, filters, client_info):
         )
     
     compound_colour = {
-        "SOFT": "rgba(255, 0, 0, 255)",
-        "MEDIUM": "rgba(255, 191, 0, 255)",
-        "HARD": "rgba(150, 150, 150, 255)",
-        "UNKNOWN": "rgba(0, 0, 0, 255)"
+        "SOFT": "rgba(255, 0, 0, 1)",
+        "MEDIUM": "rgba(255, 191, 0, 1)",
+        "HARD": "rgba(150, 150, 150, 1)",
+        "UNKNOWN": "rgba(0, 0, 0, 1)"
     }
+
+    def colour_opacity(compound, lap_id):
+        colour = compound_colour[compound]
+        if filter_exists(filters, "LapId") and lap_id not in filter_values(filters, "LapId"):
+            colour = colour.replace("1)", "0.25)")
+        return colour
+
+    data["colour"] = data.apply(lambda x: colour_opacity(x["Compound"], x["LapId"]), axis=1)
+    
+    if filter_exists(filters, "LapId"):
+        data["line_colour"] = data["LapId"].apply(lambda x: "rgba(0, 0, 0, 1)" if x in filter_values(filters, "LapId") else "rgba(0, 0, 0, 0.25)")
+    else:
+        data["line_colour"] = "rgba(0, 0, 0, 1)"
  
     # Plot times
-    for compound in list(data["Compound"].unique()):
-        trace_data = data[(data["Compound"] == compound)]
-        fig.add_trace(
-            go.Scatter(
-                x=trace_data.index,
-                y=trace_data[time_field],
-                mode="markers",
-                marker_color=compound_colour[compound],
-                marker_line_width=1,
-                marker_line_color="rgb(0, 0, 0)",
-                hoverinfo="text",
-                hovertext=trace_data["text"],
-                customdata=trace_data[["StintId", "LapId"]].to_dict("records"),
-                name=compound
-            )
+    fig.add_trace(
+        go.Scatter(
+            x=data.index,
+            y=data[time_field],
+            mode="markers",
+            marker_color=data["colour"],
+            marker_line_color=data["line_colour"],
+            marker_line_width=1,
+            hoverinfo="text",
+            hovertext=data["text"],
+            customdata=data[["StintId", "LapId"]].to_dict("records")
         )
+    )
 
     # Band by team colours and add X axis labels
     tick_values = []
@@ -288,7 +298,7 @@ def build_track_map(data_dict, filters, client_info):
 
     data = data_dict["position_data"].copy()
 
-    data = filter_data(data, filters)
+    data = filter_data(data, filters, ignore=["SectorNumber", "ZoneNumber"])
 
     if len(data) == 0:
         fig = empty_figure(fig)
@@ -326,8 +336,7 @@ def build_track_map(data_dict, filters, client_info):
                     hovertext="Brake" if trace_data["BrakeOrGear"].iloc[0] == -1 else "Gear " + str(trace_data["BrakeOrGear"].iloc[0]),
                     line_width=5,
                     line_shape="spline",
-                    customdata=trace_data[["LapId", "CarSampleId"]].to_dict("records") 
-                    # Use time since start of lap instead of sample id?
+                    customdata=trace_data[["LapId", "SessionTime"]].to_dict("records") 
                 )
             )
 
@@ -350,11 +359,29 @@ def build_track_map(data_dict, filters, client_info):
         sections = list(section_times[section_identifier].unique())
 
         for section in sections:
-            index_min = section_times[(section_times[section_identifier] == section)][time_identifier].idxmin()
-            Tla = section_times["Tla"].iloc[index_min]
-            colour = "#" + section_times["TeamColour"].iloc[index_min]
             track = track_map[(track_map[section_identifier]) == section].copy()
             track.sort_values("SampleId", inplace=True)
+
+            driver_bests = section_times[(section_times[section_identifier] == section)].groupby(["Tla", "TeamColour"])[time_identifier].min().reset_index()
+            driver_bests.sort_values(time_identifier, inplace=True)
+            driver_bests.reset_index(drop=True, inplace=True)
+
+            colour = "#" + driver_bests["TeamColour"].iloc[0]
+            benchmark_time = driver_bests[time_identifier].iloc[0]
+            hover_text = ""
+            for i in range(0, min(len(driver_bests), 5)):
+                tla = driver_bests["Tla"].iloc[i]
+                if i == 0:
+                    delta = ns_to_delta_string(benchmark_time, True)
+                else:
+                    delta = ns_to_delta_string(driver_bests[time_identifier].iloc[i] - benchmark_time)
+                line =  f"{tla}: {delta}<br>"
+                hover_text += line
+
+            if filter_exists(filters, section_identifier) and section not in filter_values(filters, section_identifier):
+                opacity = 0.5
+            else:
+                opacity = 1
             
             fig.add_trace(
                 go.Scatter(
@@ -363,11 +390,12 @@ def build_track_map(data_dict, filters, client_info):
                     mode="lines+markers",
                     marker_size=0.5,
                     hoverinfo="text",
-                    hovertext=Tla, # Show time deltas?
+                    hovertext=hover_text,
                     marker_color=colour,
+                    opacity=opacity,
                     line_width=5,
-                    line_shape="spline"
-                    # Make custom data sector / zone number, for crossfiltering (and highlighting on inputs?)
+                    line_shape="spline",
+                    customdata=[{section_identifier: section}] * len(track)
                 )
             )
 
@@ -389,6 +417,10 @@ def build_track_map(data_dict, filters, client_info):
     fig.update_yaxes(
         range=[y_centre - axis_length / 2, y_centre + axis_length / 2],
         visible=False
+    )
+
+    fig.update_layout(
+        showlegend=False
     )
 
     return fig
@@ -521,6 +553,87 @@ def build_inputs_graph(data_dict, filters, client_info):
     # Car inputs over time for a maximum of two laps
 
     fig = get_figure(client_info)
+
+    if data_dict is None:
+        fig = empty_figure(fig)
+        return fig
+
+    filtered_lap_ids = filter_values(filters, "LapId")
+    if not 2 >= len(filtered_lap_ids) > 0:
+        fig = empty_figure(fig, "Filter to one/two laps to view driver input telemetry")
+        return fig
+
+    data = data_dict["car_data"].copy()
+
+    data = filter_data(data, filters)
+
+    norms = {
+        "RPM": (data["RPM"].min(), data["RPM"].max()),
+        "Speed": (data["Speed"].min(), data["Speed"].max()),
+        "Throttle": (data["Throttle"].min(), data["Throttle"].max()),
+        "Gear": (data["Gear"].min(), data["Gear"].max())
+    }
+
+    traces_colours = {
+        "RPM": "rgba(0, 0, 255, 1)",
+        "Speed": "rgba(0, 255, 0, 1)",
+        "Brake": "rgba(255, 0, 0, 1)",
+        "Gear": "rgba(255, 191, 0, 1)"
+    }
+
+    for trace in traces_colours:
+        if trace == "Brake":
+            data[trace] = data[trace].apply(lambda x: 1 if x == True else 0)
+            data["text_" + trace] = data[trace].apply(lambda x: trace + ": " + "Applied" if x == True else "Off")
+        else:
+            trace_min, trace_max = norms[trace]
+            trace_range = trace_max - trace_min
+            data["norm_" + trace] = data[trace].apply(lambda x: (x - trace_min) / trace_range)
+            data["text_" + trace] = data[trace].apply(lambda x: trace + ": " + str(x))
+            
+    first_lap_start_time = 0
+    for i, lap_id in enumerate(filtered_lap_ids):
+        
+        lap_data = data[(data["LapId"] == lap_id)].copy()
+        lap_data.sort_values("SessionTime", inplace=True)
+        
+        legend_group = str(i)
+        tla = lap_data["Tla"].iloc[0]
+        lap_number = lap_data["NumberOfLaps"].iloc[0]
+        legend_group_title = f"{tla} lap {lap_number}"
+        
+        if i == 0: 
+            first_lap_start_time = lap_data["SessionTime"].min()
+            time_offset = 0
+            dash_style = "solid"
+        else:
+            time_offset = lap_data["SessionTime"].min() - first_lap_start_time
+            dash_style = "dot"
+            
+        for trace in traces_colours:
+            fig.add_trace(
+                go.Scatter(
+                    x=lap_data["SessionTime"] - time_offset,
+                    y=lap_data["Brake"] if trace == "Brake" else lap_data["norm_" + trace],
+                    mode="lines+markers",
+                    marker_color=traces_colours[trace],
+                    marker_size=0.5,
+                    hoverinfo="text",
+                    hovertext=lap_data["text_" + trace],
+                    line={"dash": dash_style},
+                    legendgroup=legend_group,
+                    legendgrouptitle_text=legend_group_title,
+                    name=trace
+                )
+            )
+
+    # Hide axes
+    fig.update_xaxes(
+        visible=False
+    )
+    fig.update_yaxes(
+        visible=False
+    )
 
     return fig
 
@@ -688,8 +801,6 @@ def shade_conditions_plot(figure_state, filters):
     fig = go.Figure(figure_state)
     fig.layout.shapes = []
 
-    print(type(fig))
-
     # Get time filter values
     filter_min_max = filter_values(filters, "TimeFilter")
     if len(filter_min_max) == 0:
@@ -714,3 +825,30 @@ def shade_conditions_plot(figure_state, filters):
 
     return fig
     
+
+def add_line_to_inputs_graph(figure_state, session_time):
+
+    # Build fig from existing dict, clear any existing shapes
+    fig = go.Figure(figure_state)
+    fig.layout.shapes = []
+
+    if session_time is None:
+        return fig
+
+    x_values = figure_state["data"][0]["x"]
+    x_min, x_max = (x_values[0], x_values[-1])
+
+    print((x_min, x_max))
+    print(session_time)
+
+    if not x_min <= session_time <= x_max:
+        return fig
+
+    fig.add_vline(
+        x=session_time,
+        line_color="rgba(255, 0, 255, 0.5)"
+    )
+
+    print("yo")
+
+    return fig

@@ -2,6 +2,7 @@ import pandas as pd
 import sql_connection
 import os
 import threading
+from datetime import datetime
 
 
 def get_app_config():
@@ -39,6 +40,8 @@ def get_available_sessions():
 
 
 def read_session_data(event_id, session_name, use_test_data):
+
+    time_start = datetime.now()
 
     def read_sp(sqlalchemy_engine, sp_suffix, event_id, session_name, data_dict_list, data_key):
 
@@ -97,6 +100,8 @@ def read_session_data(event_id, session_name, use_test_data):
     for dict in data_dict_list:
         data_key = list(dict.keys())[0]
         data_dict[data_key] = dict[data_key]
+
+    print("Time taken: " + str(datetime.now() - time_start))
 
     return data_dict
 

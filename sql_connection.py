@@ -8,7 +8,7 @@ def get_pyodbc_connection():
     if "DESKTOP" in host_name:
         server = "DESKTOP-O203E5C\SAMPLESERVER"
         database = "F1Dash"
-        connection = pyodbc.connect("DRIVER={ODBC Driver 13 for SQL Server};SERVER="+server+";DATABASE="+database+";TRUSTED_CONNECTION=yes")
+        connection = pyodbc.connect("DRIVER={ODBC Driver 13 for SQL Server};SERVER="+server+";DATABASE="+database+";TRUSTED_CONNECTION=yes;MARS_Connection=yes")
         cursor = connection.cursor()
     else:
         # Azure connection string
@@ -26,7 +26,7 @@ def get_sqlalchemy_engine():
         server = "DESKTOP-O203E5C\SAMPLESERVER"
         database = "F1Dash"
         engine = sqlalchemy.create_engine(
-            "mssql+pyodbc://"+server+"/"+database+"?driver=ODBC+Driver+13+for+SQL+Server&trusted_connection=yes",
+            "mssql+pyodbc://"+server+"/"+database+"?driver=ODBC+Driver+13+for+SQL+Server&trusted_connection=yes&mars_connection=yes",
             fast_executemany=True, pool_pre_ping=True, pool_recycle=3600
         )
     else:
