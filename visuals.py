@@ -10,9 +10,25 @@ def get_figure(client_info):
             "plot_bgcolor": "rgba(0, 0, 0, 0)",
             "paper_bgcolor": "rgba(0, 0, 0, 0)"
         },
-        font_color="white",
+        font_color="#15151E",
         dragmode="select",
-        clickmode="event+select"
+        clickmode="event+select",
+        font_family="'Titillium Web', Arial",
+        title_font_size=20,
+        title_x=0,
+        margin={
+            "l": 10,
+            "r": 10,
+            "t": 50,
+            "b": 10
+        }
+    )
+
+    fig.update_xaxes(
+        gridcolor="#B8B8BB"
+    )
+    fig.update_yaxes(
+        gridcolor="#15151E"
     )
 
     if client_info["isMobile"]:
@@ -175,12 +191,38 @@ def build_lap_plot(data_dict, filters, client_info):
     if filter_exists(filters, "SectorNumber"):
         data = data_dict["sector_times"].copy()
         time_field = "SectorTime"
+        title_measure = "Sector"
+        title_values = filter_values(filters, "SectorNumber")
     elif filter_exists(filters, "ZoneNumber"):
         data = data_dict["zone_times"].copy()
         time_field = "ZoneTime"
+        title_measure = "Zone"
+        title_values = filter_values(filters, "ZoneNumber")
     else:
         data = data_dict["lap_times"].copy()
         time_field = "LapTime"
+        title_measure = "Lap"
+        title_values = []
+
+    title_values_string = ""
+    if title_values != []:
+        title_values_string += f"for {title_measure}"
+        if len(title_values) > 1: title_values_string += "s" 
+        title_values_string += " "
+        for i, value in enumerate(title_values):
+            title_values_string += str(value)
+            if len(title_values) > i + 1: title_values_string += ", "
+        title_values_string += " per Lap"
+
+    if filter_exists(filters, "LapId"):
+        subtitle = "<br><sup>Double click to clear lap selection</sup>"
+    else:
+        subtitle = ""
+
+    title = f"<b>{title_measure} Times </b>{title_values_string}{subtitle}"
+    fig.update_layout(
+        title_text = title
+    )
 
     data = filter_data(data, filters, ignore=["LapId", "StintId"])
     if len(data) == 0:
@@ -202,9 +244,9 @@ def build_lap_plot(data_dict, filters, client_info):
         )
     
     compound_colour = {
-        "SOFT": "rgba(255, 0, 0, 1)",
-        "MEDIUM": "rgba(255, 191, 0, 1)",
-        "HARD": "rgba(150, 150, 150, 1)",
+        "SOFT": "rgba(255, 30, 0, 1)",
+        "MEDIUM": "rgba(247, 225, 21, 1)",
+        "HARD": "rgba(255, 255, 255, 1)",
         "UNKNOWN": "rgba(0, 0, 0, 1)"
     }
 
@@ -252,7 +294,7 @@ def build_lap_plot(data_dict, filters, client_info):
             x1=index_max,
             fillcolor="#" + data[(data["Driver"] == driver)]["TeamColour"].iloc[0],
             layer="below",
-            opacity=0.8,
+            opacity=1,
             line_width=0.5,
             line_color="rgb(0, 0, 0)"
         )
@@ -272,8 +314,7 @@ def build_lap_plot(data_dict, filters, client_info):
         ticktext=tick_labels,
         range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
         zeroline=False,
-        gridwidth=0.2,
-        gridcolor="rgb(0, 0, 0)"
+        gridwidth=0.25
     )
 
     fig.update_layout(
@@ -299,6 +340,9 @@ def build_track_map(data_dict, filters, client_info):
     y_min = 0
     y_max = 0
 
+
+
+
     if len(filter_values(filters, "LapId")) == 1:
         # Braking and gear changes
         data = data_dict["position_data"].copy()
@@ -308,20 +352,28 @@ def build_track_map(data_dict, filters, client_info):
         if len(data) == 0:
             fig = empty_figure(fig)
             return fig
-        chart_data = data[["LapId", "SessionTime", "X", "Y", "BrakeOrGearId", "BrakeOrGear", "CarSampleId"]]
+        chart_data = data[["LapId", "NumberOfLaps", "SessionTime", "X", "Y", "BrakeOrGearId", "BrakeOrGear", "Tla"]]
         trace_ids = list(chart_data["BrakeOrGearId"].unique())
 
+        title_driver = chart_data["Tla"].iloc[0]
+        title_lap = chart_data["NumberOfLaps"].iloc[0]
+        title = f"<b>Braking and Gears</b>, {title_driver} Lap {title_lap}"
+
+        fig.update_layout(
+            title_text = title
+        )
+
         colours = {
-            -1: "rgb(255, 0, 0)",
-            0: "rgb(30, 30, 30)",
-            1: "rgb(60, 60, 60)",
-            2: "rgb(90, 90, 90)",
-            3: "rgb(120, 120, 120)",
-            4: "rgb(150, 150, 150)",
-            5: "rgb(180, 180, 180)",
-            6: "rgb(210, 210, 210)",
-            7: "rgb(230, 230, 230)",
-            8: "rgb(255, 255, 255)",
+            -1: "#FF1E00",
+            0: "#15151E",
+            1: "#15151E",
+            2: "#15151E",
+            3: "#202029",
+            4: "#2C2C34",
+            5: "#5B5B61",
+            6: "#89898E",
+            7: "#B8B8BB",
+            8: "#FFFFFF",
         }
 
         for brake_or_gear_id in trace_ids:
@@ -355,10 +407,26 @@ def build_track_map(data_dict, filters, client_info):
             section_times = data_dict["zone_times"]
             section_identifier = "ZoneNumber"
             time_identifier = "ZoneTime"
+            title_section = "Zone"
         else:
             section_times = data_dict["sector_times"]
             section_identifier = "SectorNumber"
             time_identifier = "SectorTime"
+            title_section = "Sector"
+
+        if filter_exists(filters, "LapId"):
+            title_filter = ", selected Laps"
+        else:
+            title_filter = ""
+        if filter_exists(filters, section_identifier):
+            subtitle = f"<br><sup>Double click to clear {title_section.lower()} selection</sup>"
+        else:
+            subtitle = ""
+        title = f"<b>Fastest Driver per {title_section}</b>{title_filter}{subtitle}"
+
+        fig.update_layout(
+            title_text=title
+        )
 
         section_times = filter_data(section_times, filters, ignore=["SectorNumber", "ZoneNumber"])
         
@@ -449,17 +517,44 @@ def build_stint_graph(data_dict, filters, client_info):
     if filter_exists(filters, "SectorNumber"):
         data = data_dict["sector_times"].copy()
         time_field = "SectorTime"
+        title_section = "Sector"
+        title_values = filter_values(filters, "SectorNumber")
     elif filter_exists(filters, "ZoneNumber"):
         data = data_dict["zone_times"].copy()
         time_field = "ZoneTime"
+        title_section = "Zone"
+        title_values = filter_values(filters, "ZoneNumber")
     else:
         data = data_dict["lap_times"].copy()
         time_field = "LapTime"
+        title_section = "Lap"
+        title_values = []
 
-    data = filter_data(data, filters, ignore=["LapId"])
+    if filter_exists(filters, "StintId"):
+        ignore = ["LapId", "TimeFilter"]
+        title_over = "Stint"
+    else:
+        ignore = ["LapId"]
+        title_over = "Session"
+    
+    data = filter_data(data, filters, ignore)
     if len(data) == 0:
         fig = empty_figure(fig)
         return fig
+
+    title_values_string = ""
+    if title_values != []:
+        title_values_string += f"for {title_section}"
+        if len(title_values) > 1: title_values_string += "s" 
+        title_values_string += " "
+        for i, value in enumerate(title_values):
+            title_values_string += str(value)
+            if len(title_values) > i + 1: title_values_string += ", "    
+
+    title = f"<b>{title_section} Times over {title_over}</b> {title_values_string}"
+    fig.update_layout(
+        title_text=title
+    )
 
     data = data.groupby(["TeamOrder", "DriverOrder", "NumberOfLaps", "StintId", "StintNumber", 
                          "LapsInStint", "LapId", "Compound", "Driver", 
@@ -546,8 +641,7 @@ def build_stint_graph(data_dict, filters, client_info):
         ticktext=tick_labels,
         range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
         zeroline=False,
-        gridwidth=0.2,
-        gridcolor="rgb(0, 0, 0)"
+        gridwidth=0.2
     )
     fig.update_xaxes(
         title = x_title
@@ -559,17 +653,22 @@ def build_stint_graph(data_dict, filters, client_info):
 def build_inputs_graph(data_dict, filters, client_info):
 
     # Car inputs over time for a maximum of two laps
+    # Returns an extra boolean to indicate whether any data is being displayed
 
     fig = get_figure(client_info)
 
     if data_dict is None:
         fig = empty_figure(fig)
-        return fig
+        return fig, False
+
+    if filters["input_trace"] == []:
+        fig = empty_figure(fig)
+        return fig, True
 
     filtered_lap_ids = filter_values(filters, "LapId")
     if not 2 >= len(filtered_lap_ids) > 0:
         fig = empty_figure(fig, "Filter to one/two laps to view driver input telemetry")
-        return fig
+        return fig, False
 
     data = data_dict["car_data"].copy()
 
@@ -583,23 +682,31 @@ def build_inputs_graph(data_dict, filters, client_info):
     }
 
     traces_colours = {
-        "RPM": "rgba(0, 0, 255, 1)",
-        "Speed": "rgba(0, 255, 0, 1)",
-        "Brake": "rgba(255, 0, 0, 1)",
-        "Gear": "rgba(255, 191, 0, 1)"
+        "RPM": "#FF1E00",
+        "Speed": "#b228ad",
+        "Brake": "#15151E",
+        "Gear": "#0dcb0f"
     }
 
-    for trace in traces_colours:
+    for trace in filters["input_trace"]:
         if trace == "Brake":
             data[trace] = data[trace].apply(lambda x: 1 if x == True else 0)
-            data["text_" + trace] = data[trace].apply(lambda x: trace + ": " + "Applied" if x == True else "Off")
+            data["text_" + trace] = data[trace].apply(lambda x: "Brake applied" if x == True else "Brake off")
         else:
             trace_min, trace_max = norms[trace]
             trace_range = trace_max - trace_min
             data["norm_" + trace] = data[trace].apply(lambda x: (x - trace_min) / trace_range)
-            data["text_" + trace] = data[trace].apply(lambda x: trace + ": " + str(x))
+            if trace == "Speed":
+                data["text_" + trace] = data[trace].apply(lambda x: str(x) + " km/h")
+            elif trace == "RPM":
+                data["text_" + trace] = data[trace].apply(lambda x: str(x) + " RPM")
+            elif trace == "Gear":
+                data["text_" + trace] = data[trace].apply(lambda x: "Gear" + str(x))
             
     first_lap_start_time = 0
+    max_lap_end_time = 0
+    title_drivers = []
+    title_laps = []
     for i, lap_id in enumerate(filtered_lap_ids):
         
         lap_data = data[(data["LapId"] == lap_id)].copy()
@@ -609,16 +716,21 @@ def build_inputs_graph(data_dict, filters, client_info):
         tla = lap_data["Tla"].iloc[0]
         lap_number = lap_data["NumberOfLaps"].iloc[0]
         legend_group_title = f"{tla} lap {lap_number}"
+
+        title_drivers.append(tla)
+        title_laps.append(lap_number)
         
         if i == 0: 
             first_lap_start_time = lap_data["SessionTime"].min()
+            max_lap_end_time = lap_data["SessionTime"].max()
             time_offset = 0
             dash_style = "solid"
         else:
             time_offset = lap_data["SessionTime"].min() - first_lap_start_time
+            max_lap_end_time = max(max_lap_end_time, lap_data["SessionTime"].max() - time_offset)
             dash_style = "dot"
             
-        for trace in traces_colours:
+        for trace in filters["input_trace"]:
             fig.add_trace(
                 go.Scatter(
                     x=lap_data["SessionTime"] - time_offset,
@@ -637,13 +749,54 @@ def build_inputs_graph(data_dict, filters, client_info):
 
     # Hide axes
     fig.update_xaxes(
-        visible=False
+        showticklabels=False,
+        showgrid=False,
+        showline=True,
+        linewidth=2,
+        linecolor="#B8B8BB",
+        title_text="Time",
+        range=[first_lap_start_time, max_lap_end_time]
     )
     fig.update_yaxes(
-        visible=False
+        showticklabels=False,
+        showgrid=False,
+        showline=True,
+        linewidth=2,
+        linecolor="#B8B8BB",
+        range=[0, 1]
+    )
+    
+    # Get title
+    if filter_exists(filters, "SectorNumber"):
+        title_measure = "Sector"
+        title_values = filter_values(filters, "SectorNumber")
+    elif filter_exists(filters, "ZoneNumber"):
+        title_measure = "Zone"
+        title_values = filter_values(filters, "ZoneNumber")
+    else:
+        title_values = []
+
+    title_values_string = ""
+    if title_values != []:
+        title_values_string += f", {title_measure}"
+        if len(title_values) > 1: title_values_string += "s" 
+        title_values_string += " "
+        for i, value in enumerate(title_values):
+            title_values_string += str(value)
+            if len(title_values) > i + 1: title_values_string += ", "
+
+    title = f"<b>Input Telemetry</b> for "
+    for i, lap in enumerate(title_laps):
+        if i > 0: title += " and "
+        title += f"{title_drivers[i]} Lap {str(lap)}"
+    title += title_values_string
+
+    fig.update_layout(
+        title_text=title,
+        showlegend=True
     )
 
-    return fig
+    return fig, True
 
 
 def build_conditions_plot(data_dict, client_info):
@@ -657,7 +810,8 @@ def build_conditions_plot(data_dict, client_info):
         showlegend=False,
         selectdirection="h",
         clickmode="event",
-        selectionrevision=False
+        selectionrevision=False,
+        font_color="#FFFFFF"
     )
 
     if data_dict is None:
@@ -674,11 +828,11 @@ def build_conditions_plot(data_dict, client_info):
     data["Laps"] = data["Laps"].apply(lambda x: x / max_laps)
     
     status_colours = {
-        "AllClear": "rgb(0, 255, 0)",
-        "Red": "rgb(255, 0, 0)",
-        "Yellow": "rgb(255, 191, 0)",
-        "SCDeployed": "rgb(242, 140, 40)",
-        "VSCDeployed": "rgb(191, 64, 191)"
+        "AllClear": "#0dcb0f",
+        "Red": "#FF1E00",
+        "Yellow": "#f7e115",
+        "SCDeployed": "#f56b0e",
+        "VSCDeployed": "#b228ad"
     }
 
     metrics = {
@@ -687,14 +841,14 @@ def build_conditions_plot(data_dict, client_info):
             "axis_label": "Humidity",
             "hoverable": True, 
             "text_suffix": "%",
-            "colour": "rgb(100, 100, 255)"
+            "colour": "#b228ad"
         },
         "Rainfall": {
             "trace_type": "scatter",
             "axis_label": "Rain",
             "hoverable": False, 
             "text_suffix": "",
-            "colour": "rgb(0, 0, 255)"
+            "colour": "#2972ed"
         },
         "TrackTemp": {
             "trace_type": "annotation",
@@ -725,7 +879,7 @@ def build_conditions_plot(data_dict, client_info):
             "axis_label": "Track activity",
             "hoverable": False,
             "text_suffix": "",
-            "colour": "rgb(255, 0, 0)"
+            "colour": "#FF1E00"
         }
     }
 
@@ -768,18 +922,21 @@ def build_conditions_plot(data_dict, client_info):
                 )
 
     # Do track status separately
-    bar_bottom = max(y_values) + 0.7
+    line_y = max(y_values) + 1
     y_values.append(max(y_values) + 1)
     y_labels.append("Track status")
-    
+
     for status in status_colours:
         trace_data = data[(data["TrackStatus"] == status)]
         fig.add_trace(
-            go.Bar(
+            go.Scatter(
                 x=trace_data["SessionTime"],
-                y=[0.6] * len(trace_data),
-                base=[bar_bottom] * len(trace_data),
+                y=[line_y] * len(trace_data),
+                mode="lines+markers",
+                line_width=5,
+                fill="toself",
                 marker_color=status_colours[status],
+                marker_size=0.5,
                 hoverinfo="text",
                 hovertext=status
             )
@@ -788,10 +945,16 @@ def build_conditions_plot(data_dict, client_info):
     # Update axes
     fig.update_yaxes(
         tickvals = y_values,
-        ticktext = y_labels
+        ticktext = y_labels,
+        showgrid=False
     )
     fig.update_xaxes(
-        visible=False
+        visible=True,
+        title_text="Time",
+        range=[data["SessionTime"].min(), data["SessionTime"].max()],
+        showticklabels=False,
+        showgrid=False,
+        showline=True
     )
 
     fig.update_layout(
@@ -803,18 +966,17 @@ def build_conditions_plot(data_dict, client_info):
 
 def shade_conditions_plot(figure_state, filters):
     
-    # Takes session time tuple from relayoutData xaxis.range output and draws vrects either side
+    # Takes session time tuple from selectedData xaxis.range output and draws vrects either side
 
     # Build fig from existing dict, clear any existing shapes
     fig = go.Figure(figure_state)
     fig.layout.shapes = []
 
     # Get time filter values
-    filter_min_max = filter_values(filters, "TimeFilter")
-    if len(filter_min_max) == 0:
+    if len(filters) == 0:
         return fig
 
-    filter_min, filter_max = (filter_min_max[0], filter_min_max[1])
+    filter_min, filter_max = filters["TimeFilter"]
 
     # Get session min and max times from arrays within fig (doesn't seem to be possible to get these from any simple fig.prop)
     x_values = figure_state["data"][0]["x"]
@@ -836,6 +998,8 @@ def shade_conditions_plot(figure_state, filters):
 
 def add_line_to_inputs_graph(figure_state, session_time):
 
+    # Too slow to render in app. Maybe implement as part of a JS clientside callback?
+
     # Build fig from existing dict, clear any existing shapes
     fig = go.Figure(figure_state)
     fig.layout.shapes = []
@@ -846,9 +1010,6 @@ def add_line_to_inputs_graph(figure_state, session_time):
     x_values = figure_state["data"][0]["x"]
     x_min, x_max = (x_values[0], x_values[-1])
 
-    print((x_min, x_max))
-    print(session_time)
-
     if not x_min <= session_time <= x_max:
         return fig
 
@@ -856,7 +1017,5 @@ def add_line_to_inputs_graph(figure_state, session_time):
         x=session_time,
         line_color="rgba(255, 0, 255, 0.5)"
     )
-
-    print("yo")
 
     return fig
