@@ -491,6 +491,8 @@ BEGIN
 	SELECT EventId
 		,EventLabel
 		,SessionName
+		,EventName
+		,OfficialEventName
 
 	FROM (
 
@@ -498,6 +500,8 @@ BEGIN
 		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
 		,E.EventDate
 		,SessionName
+		,E.EventName
+		,E.OfficialEventName
 
 	FROM dbo.Session AS S
 
@@ -512,6 +516,8 @@ BEGIN
 		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
 		,E.EventDate
 		,'Practice (all)' AS SessionName
+		,E.EventName
+		,E.OfficialEventName
 
 	FROM dbo.Session AS S
 
@@ -525,6 +531,8 @@ BEGIN
 	GROUP BY EventId
 		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName
 		,E.EventDate
+		,E.EventName
+		,E.OfficialEventName
 
 	HAVING COUNT(*) = 3
 

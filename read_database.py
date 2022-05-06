@@ -29,14 +29,9 @@ def app_logging(client_info, type, message):
 def get_available_sessions():
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
     sessions_frame = pd.read_sql_query("SET NOCOUNT ON; EXEC dbo.Read_AvailableSessions", sqlalchemy_engine)
-    unique_events = sessions_frame[["EventLabel", "EventId"]].drop_duplicates()
-    available_events = dict(zip(unique_events["EventLabel"], unique_events["EventId"].tolist()))
-    available_sessions = {}
-    for event_id in list(unique_events["EventId"].unique().tolist()):
-        available_sessions[event_id] = list(sessions_frame[(sessions_frame["EventId"] == event_id)]["SessionName"])
     sqlalchemy_engine.dispose()
 
-    return [{"events": available_events, "sessions": available_sessions}]
+    return sessions_frame
 
 
 def read_session_data(event_id, session_name, use_test_data):
@@ -62,7 +57,7 @@ def read_session_data(event_id, session_name, use_test_data):
 
     sp_dict = {
         #"position_data": "PositionData",
-        #"car_data": "CarData",
+        "car_data": "CarData",
         "track_map": "TrackMap",
         "lap_times": "LapTimes",
         "sector_times": "SectorTimes",

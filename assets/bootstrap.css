@@ -105,14 +105,18 @@ hr:not([size]) {
 
 h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5, h6, .h6 {
   margin-top: 0;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.0rem;
   font-weight: 500;
   line-height: 1.2;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 h1, .h1 {
-  font-size: calc(1.525rem + 3.3vw);
+  font-size: calc(1.525rem);
+  background-color: #FF1E00;
+  font-weight: 600;
 }
 
 @media (min-width: 1200px) {
@@ -122,12 +126,13 @@ h1, .h1 {
 }
 
 h2, .h2 {
-  font-size: calc(1.425rem + 2.1vw);
+  font-size: calc(1.425rem);
+  background-color: #15151E;
 }
 
 @media (min-width: 1200px) {
   h2, .h2 {
-    font-size: 3rem;
+    font-size: 2rem;
   }
 }
 
@@ -2458,8 +2463,8 @@ textarea.form-control-lg {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  -webkit-print-color-adjust: exact;
-  color-adjust: exact;
+  /*-webkit-print-color-adjust: exact;
+  color-adjust: exact;*/
 }
 
 .form-check-input[type="checkbox"] {
@@ -6880,8 +6885,8 @@ fieldset:disabled .btn {
   top: 0;
   left: 0;
   z-index: 1040;
-  width: 100vw;
-  height: 100vh;
+  width: 200vw;
+  height: 200vh;
   background-color: #000;
 }
 

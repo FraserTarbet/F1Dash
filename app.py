@@ -95,7 +95,13 @@ dash_app.layout = html.Div(
 dash_app.clientside_callback(
     """
     function(trigger){
-        const client_info = {userAgent: navigator.userAgent, height: screen.height, width: screen.width};
+        const client_info = {
+            userAgent: navigator.userAgent, 
+            height: screen.availHeight, 
+            width: screen.width,
+            documentHeight: document.documentElement.clientHeight,
+            documentWidth: document.documentElement.clientWidth
+        };
         client_info.isMobile = Boolean(client_info.width < """ + config["DetectMobileWidth"] + """ || client_info.height < """ + config["DetectMobileHeight"] + """);
 
         return client_info
@@ -117,13 +123,13 @@ def initiate(client_info):
 
     is_mobile = True if client_info["isMobile"] == True else False
     if is_mobile == True or config["ForceMobileLayout"] == "1":
-        layout = layouts.layout_dict["mobile"]
+        layout = layouts.layout_mobile
     else:
-        layout = layouts.layout_dict["desktop"]
+        layout = layouts.layout_desktop
 
     read_database.app_logging(str(client_info), "initiate", "mobile" if is_mobile else "desktop")
-    
-    available_events_and_sessions = json.dumps(read_database.get_available_sessions())
+
+    available_events_and_sessions = read_database.get_available_sessions().to_dict()
 
     return (
         layout,
@@ -162,52 +168,6 @@ def open_close_parameters(open_click, datasets, is_open, selected_session, loade
             open = False
     return open
 
-# Populate session options and filters on panel open or filter change
-@dash_app.callback(
-    Output("event_select", "options"),
-    Output("event_select", "value"),
-    Output("session_select", "options"),
-    Output("session_select", "value"),
-    Input("open_parameters_button", "n_clicks"),
-    Input("top_filters", "data"),
-    State("events_and_sessions", "data"),
-    State("selected_session", "data"),
-    State("loaded_session", "data"),
-    State("datasets", "data")
-)
-def populate_parameters(click, top_filters, events_and_sessions, selected_session, loaded_session, datasets):
-    events_and_sessions = json.loads(events_and_sessions)[0]
-
-    # Event
-    events_list = []
-    for label in events_and_sessions["events"]:
-        events_list.append({"label": label, "value": events_and_sessions["events"][label]})    
-    if loaded_session is None:
-        event_value = events_list[0]["value"]
-    else:
-        # Populate loaded event into input
-        loaded_session = json.loads(loaded_session)
-        loaded_event_id = loaded_session["EventId"]
-        loaded_session_name = loaded_session["SessionName"]
-        event_value = loaded_event_id
-
-    # Session
-    sessions_list = []
-    for session in events_and_sessions["sessions"][str(event_value)]:
-        sessions_list.append({"label": session, "value": session})
-    if loaded_session is None:
-        session_value = sessions_list[0]["value"]
-    else:
-        # Populate selected session into input
-        session_value = loaded_session_name
-    
-    return (
-        events_list,
-        event_value,
-        sessions_list,
-        session_value
-    )
-
 
 # Toggle parameters panel close enable/disable, as well as loading indicator
 @dash_app.callback(
@@ -233,6 +193,59 @@ def lock_panel_on_loading(open_parameters_button, selected_session):
             "static",
             no_update
         )
+
+
+# Populate event dropdown
+@dash_app.callback(
+    Output("event_select", "options"),
+    Output("event_select", "value"),
+    Input("events_and_sessions", "data"),
+    Input("open_parameters_button", "n_clicks"),
+    State("loaded_session", "data")
+)
+def event_selector_refresh(events_and_sessions, panel_open, loaded_session):
+    if callback_context.triggered[0]["prop_id"].split(".")[0] == "events_and_sessions":
+        #events_and_sessions = json.loads(events_and_sessions)
+        event_options = visuals.get_filter_options(events_and_sessions, {}, ("EventLabel", "EventId"))
+        event_value = event_options[0]["value"]
+    elif callback_context.triggered[0]["prop_id"].split(".")[0] == "open_parameters_button":
+        event_options = no_update
+        event_value = json.loads(loaded_session)["EventId"]
+    else:
+        event_options = no_update
+        event_value = no_update
+
+    return (
+        event_options,
+        event_value
+    )
+    
+# Populate session dropdown
+@dash_app.callback(
+    Output("session_select", "options"),
+    Output("session_select", "value"),
+    Input("open_parameters_button", "n_clicks"),
+    Input("event_select", "value"),
+    State("events_and_sessions", "data"),
+    State("loaded_session", "data")
+)
+def session_selector_refresh(panel_open, event_select_value, events_and_sessions, loaded_session):
+    if callback_context.triggered[0]["prop_id"].split(".")[0] == "event_select":
+        #events_and_sessions = json.loads(events_and_sessions)
+        session_options = visuals.get_filter_options(events_and_sessions, {"EventId": [int(event_select_value)]}, ("SessionName", "SessionName"))
+        session_value = session_options[0]["value"]
+    elif callback_context.triggered[0]["prop_id"].split(".")[0] == "open_parameters_button":
+        session_options = no_update
+        session_value = json.loads(loaded_session)["SessionName"]
+    else:
+        session_options = no_update
+        session_value = no_update
+
+    return (
+        session_options,
+        session_value
+    )
+
 
 # Request session datasets
 @dash_app.callback(
@@ -299,10 +312,12 @@ def load_datasets(selected_session):
 # Update heading and loaded session keys on dataset reload
 # Unhide filters, create layout components for visuals
 @dash_app.callback(
-    Output("dashboard_heading", "children"),
+    Output("upper_heading", "children"),
+    Output("lower_heading", "children"),
     Output("loaded_session", "data"),
     Output("filters_div", "hidden"),
     Output("dashboard_div", "hidden"),
+    Output("abstract_div", "hidden"),
     Input("datasets", "data"),
     State("events_and_sessions", "data"),
     State("selected_session", "data")
@@ -313,23 +328,24 @@ def refresh_heading(datasets, events_and_sessions, selected_session):
             no_update,
             no_update,
             no_update,
+            no_update,
+            no_update,
             no_update
         )
     else:
         selected_session = json.loads(selected_session)
         event_id = selected_session["EventId"]
         session_name = selected_session["SessionName"]
-        events_dict = json.loads(events_and_sessions)[0]["events"]
-        for event_name in events_dict:
-            if int(events_dict[event_name]) == int(event_id): break
-
+        upper_heading, lower_heading = visuals.get_dashboard_headings(events_and_sessions, event_id, session_name)
         loaded_session = json.dumps({"EventId": event_id, "SessionName": session_name})
 
     return (
-        f"{event_name}, {session_name}",
+        upper_heading,
+        lower_heading,
         loaded_session,
         False,
-        False
+        False,
+        True
     )
 
 
@@ -337,21 +353,19 @@ def refresh_heading(datasets, events_and_sessions, selected_session):
 # Force conditions_plot sizing here? Keeps expanding unpredictably
 @dash_app.callback(
     Output("conditions_panel", "is_open"),
-    Output("conditions_plot", "style"),
+    #Output("conditions_plot", "style"),
     Input("open_conditions_button", "n_clicks"),
     State("client_info", "data")
 )
 def open_conditions_panel(click, client_info):
     if click is not None:
-        return (
-            True,
-            {"height": 250}
-        )
+        return True
+        #    {"height": 250}
+        
     else:
-        return (
-            False,
-            {}
-        )
+        return False
+        #    {}
+        
 
 
 
@@ -598,7 +612,6 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
             filter = filter_dict_from_inputs({
                 "TimeFilter": conditions_plot_selection
             })
-            print(filter)
             return visuals.shade_conditions_plot(conditions_plot_state, filter)
 
         

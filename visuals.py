@@ -11,7 +11,7 @@ def get_figure(client_info):
             "paper_bgcolor": "rgba(0, 0, 0, 0)"
         },
         font_color="#15151E",
-        dragmode="select",
+        dragmode="lasso",
         clickmode="event+select",
         font_family="'Titillium Web', Arial",
         title_font_size=20,
@@ -25,17 +25,19 @@ def get_figure(client_info):
     )
 
     fig.update_xaxes(
-        gridcolor="#B8B8BB"
+        gridcolor="#B8B8BB",
+        fixedrange=True
     )
     fig.update_yaxes(
-        gridcolor="#15151E"
+        gridcolor="#15151E",
+        fixedrange=True
     )
 
     if client_info["isMobile"]:
         # Disable more functionality
-        pass
-    else:
-        pass
+        fig.update_layout(
+            dragmode=False
+        )
 
     client_height = client_info["height"]
     # Dynamically size figure heights for screen sizes
@@ -102,6 +104,9 @@ def get_filter_options(data, filter_dict, return_fields_tuple, ignore=[]):
 
     # Get valid filter options based on existing top-level filters. Used by filters, not data visuals.
     # Returns a list of dicts in shape [{label: value}] for multi-select dropdowns
+
+    if not isinstance(data, pd.DataFrame):
+        data = pd.DataFrame(data)
 
     for field in filter_dict:
         if field in data.columns and field not in ignore:
@@ -175,6 +180,18 @@ def get_time_axis_ticks(time_min, time_max):
         tick_labels.append(label)
         
     return tick_values, tick_labels
+
+
+def get_dashboard_headings(events_and_sessions, loaded_event_id, loaded_session_name):
+    # Returns two headings for top of dashboard
+    if not isinstance(events_and_sessions, pd.DataFrame):
+        events_and_sessions = pd.DataFrame(events_and_sessions)
+
+    session_row = events_and_sessions[(events_and_sessions["EventId"] == int(loaded_event_id)) & (events_and_sessions["SessionName"] == loaded_session_name)]
+    upper_heading = session_row["OfficialEventName"].iloc[0]
+    lower_heading = f"{session_row['EventName'].iloc[0]}: {session_row['SessionName'].iloc[0]}"
+
+    return (upper_heading, lower_heading)
 
 
 def build_lap_plot(data_dict, filters, client_info):
@@ -281,30 +298,35 @@ def build_lap_plot(data_dict, filters, client_info):
     # Band by team colours and add X axis labels
     tick_values = []
     tick_labels = []
+    previous_driver_index_end = 0
     
     for driver in list(data["Driver"].unique()):
-        index_min = data.index[(data["Driver"] == driver)].min()
-        index_max = data.index[(data["Driver"] == driver)].max()
-        index_mid = int(index_min + (index_max - index_min) / 2)
-        tick_values.append(index_mid)
+        #index_min = data.index[(data["Driver"] == driver)].min()
+        x_min = previous_driver_index_end
+        x_max = data.index[(data["Driver"] == driver)].max()
+        x_mid = int(x_min + (x_max - x_min) / 2)
+        previous_driver_index_end = x_max
+        tick_values.append(x_mid)
         tick_labels.append(data[(data["Driver"] == driver)]["Tla"].iloc[0])
         
         fig.add_vrect(
-            x0=index_min,
-            x1=index_max,
+            x0=x_min,
+            x1=x_max,
             fillcolor="#" + data[(data["Driver"] == driver)]["TeamColour"].iloc[0],
             layer="below",
             opacity=1,
             line_width=0.5,
-            line_color="rgb(0, 0, 0)"
+            line_color="#FFFFFF"
         )
         
     fig.update_xaxes(
         tickvals=tick_values,
         ticktext=tick_labels,
-        range=[-10, len(data) + 10],
+        range=[-2, len(data) + 2],
         zeroline=False,
-        showgrid=False
+        showgrid=False,
+        linewidth=2,
+        linecolor="#B8B8BB"
     )
 
     # Update Y axis
@@ -314,7 +336,9 @@ def build_lap_plot(data_dict, filters, client_info):
         ticktext=tick_labels,
         range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
         zeroline=False,
-        gridwidth=0.25
+        gridwidth=0.25,
+        linewidth=2,
+        linecolor="#B8B8BB"
     )
 
     fig.update_layout(
@@ -326,7 +350,7 @@ def build_lap_plot(data_dict, filters, client_info):
 
 def build_track_map(data_dict, filters, client_info):
 
-    # Fastest driver per sector or zone, or brake/gear per sector or zone
+    # Fastest driver per sector or zone, or time vs session/personal best per sector or zone
     # Not filtered by sector or zone
 
     fig = get_figure(client_info)
@@ -342,122 +366,68 @@ def build_track_map(data_dict, filters, client_info):
 
 
 
+    # Fastest driver per zone/sector
+    track_map = data_dict["track_map"]
 
-    if len(filter_values(filters, "LapId")) == 1:
-        # Braking and gear changes
-        data = data_dict["position_data"].copy()
-
-        data = filter_data(data, filters, ignore=["SectorNumber", "ZoneNumber"])
-
-        if len(data) == 0:
-            fig = empty_figure(fig)
-            return fig
-        chart_data = data[["LapId", "NumberOfLaps", "SessionTime", "X", "Y", "BrakeOrGearId", "BrakeOrGear", "Tla"]]
-        trace_ids = list(chart_data["BrakeOrGearId"].unique())
-
-        title_driver = chart_data["Tla"].iloc[0]
-        title_lap = chart_data["NumberOfLaps"].iloc[0]
-        title = f"<b>Braking and Gears</b>, {title_driver} Lap {title_lap}"
-
-        fig.update_layout(
-            title_text = title
-        )
-
-        colours = {
-            -1: "#FF1E00",
-            0: "#15151E",
-            1: "#15151E",
-            2: "#15151E",
-            3: "#202029",
-            4: "#2C2C34",
-            5: "#5B5B61",
-            6: "#89898E",
-            7: "#B8B8BB",
-            8: "#FFFFFF",
-        }
-
-        for brake_or_gear_id in trace_ids:
-            trace_data = chart_data[(chart_data["BrakeOrGearId"] == brake_or_gear_id)].copy()
-            trace_data.sort_values("SessionTime", inplace=True)
-            fig.add_trace(
-                go.Scatter(
-                    x=trace_data["X"],
-                    y=trace_data["Y"],
-                    mode="lines+markers",
-                    marker_size=0.5,
-                    marker_color=colours[trace_data["BrakeOrGear"].iloc[0]],
-                    hoverinfo="text",
-                    hovertext="Brake" if trace_data["BrakeOrGear"].iloc[0] == -1 else "Gear " + str(trace_data["BrakeOrGear"].iloc[0]),
-                    line_width=5,
-                    line_shape="spline",
-                    customdata=trace_data[["LapId", "SessionTime"]].to_dict("records") 
-                )
-            )
-
-        x_min = data["X"].min()
-        x_max = data["X"].max()
-        y_min = data["Y"].min()
-        y_max = data["Y"].max()
-
+    if filter_values(filters, "track_split")[0] == "zones":
+        section_times = data_dict["zone_times"]
+        section_identifier = "ZoneNumber"
+        time_identifier = "ZoneTime"
+        title_section = "Zone"
     else:
-        # Fastest driver per zone/sector
-        track_map = data_dict["track_map"]
+        section_times = data_dict["sector_times"]
+        section_identifier = "SectorNumber"
+        time_identifier = "SectorTime"
+        title_section = "Sector"
 
-        if filter_values(filters, "track_split")[0] == "zones":
-            section_times = data_dict["zone_times"]
-            section_identifier = "ZoneNumber"
-            time_identifier = "ZoneTime"
-            title_section = "Zone"
+    lap_id_filter = filter_values(filters, "LapId")
+    if len(lap_id_filter) == 1:
+        ignore = ["SectorNumber", "ZoneNumber", "LapId"]
+    else:
+        ignore = ["SectorNumber", "ZoneNumber"]
+
+    section_times = filter_data(section_times, filters, ignore)
+    
+    section_times.reset_index(drop=True, inplace=True)
+    sections = list(section_times[section_identifier].unique())
+
+    for section in sections:
+        track = track_map[(track_map[section_identifier]) == section].copy()
+        track.sort_values("SampleId", inplace=True)
+
+        driver_bests = section_times[(section_times[section_identifier] == section)].groupby(["Tla", "TeamColour"])[time_identifier].min().reset_index()
+        driver_bests.sort_values(time_identifier, inplace=True)
+        driver_bests.reset_index(drop=True, inplace=True)
+
+        if filter_exists(filters, section_identifier) and section not in filter_values(filters, section_identifier):
+            opacity = 0.5
         else:
-            section_times = data_dict["sector_times"]
-            section_identifier = "SectorNumber"
-            time_identifier = "SectorTime"
-            title_section = "Sector"
+            opacity = 1
 
-        if filter_exists(filters, "LapId"):
-            title_filter = ", selected Laps"
-        else:
-            title_filter = ""
-        if filter_exists(filters, section_identifier):
-            subtitle = f"<br><sup>Double click to clear {title_section.lower()} selection</sup>"
-        else:
-            subtitle = ""
-        title = f"<b>Fastest Driver per {title_section}</b>{title_filter}{subtitle}"
+        if len(filter_values(filters, "LapId")) == 1:
+            # Show time vs session/personal bests per section
 
-        fig.update_layout(
-            title_text=title
-        )
+            lap_id = lap_id_filter[0]
+            colours = {
+                "session_best": "#b228ad",
+                "personal_best": "#0dcb0f",
+                "no_improvement": "#f7e115"
+            }
+            tla = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)]["Tla"].iloc[0]
+            section_time = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)][time_identifier].iloc[0]
+            personal_best = driver_bests[(driver_bests["Tla"] == tla)][time_identifier].iloc[0]
+            session_best = driver_bests[time_identifier].min()
 
-        section_times = filter_data(section_times, filters, ignore=["SectorNumber", "ZoneNumber"])
-        
-        section_times.reset_index(drop=True, inplace=True)
-        sections = list(section_times[section_identifier].unique())
-
-        for section in sections:
-            track = track_map[(track_map[section_identifier]) == section].copy()
-            track.sort_values("SampleId", inplace=True)
-
-            driver_bests = section_times[(section_times[section_identifier] == section)].groupby(["Tla", "TeamColour"])[time_identifier].min().reset_index()
-            driver_bests.sort_values(time_identifier, inplace=True)
-            driver_bests.reset_index(drop=True, inplace=True)
-
-            colour = "#" + driver_bests["TeamColour"].iloc[0]
-            benchmark_time = driver_bests[time_identifier].iloc[0]
-            hover_text = ""
-            for i in range(0, min(len(driver_bests), 5)):
-                tla = driver_bests["Tla"].iloc[i]
-                if i == 0:
-                    delta = ns_to_delta_string(benchmark_time, True)
-                else:
-                    delta = ns_to_delta_string(driver_bests[time_identifier].iloc[i] - benchmark_time)
-                line =  f"{tla}: {delta}<br>"
-                hover_text += line
-
-            if filter_exists(filters, section_identifier) and section not in filter_values(filters, section_identifier):
-                opacity = 0.5
+            if section_time == session_best:
+                colour = colours["session_best"]
+                hover_text = "Session best: " + ns_to_delta_string(section_time, True)
+            elif section_time == personal_best:
+                colour = colours["personal_best"]
+                hover_text = f"Personal best, {ns_to_delta_string(section_time - session_best)} to session best"
             else:
-                opacity = 1
-            
+                colour = colours["no_improvement"]
+                hover_text = f"No improvement, {ns_to_delta_string(section_time - personal_best)} to personal best,<br>{ns_to_delta_string(section_time - session_best)} to session best"
+
             fig.add_trace(
                 go.Scatter(
                     x=track["X"],
@@ -474,10 +444,60 @@ def build_track_map(data_dict, filters, client_info):
                 )
             )
 
-            x_min = track_map["X"].min()
-            x_max = track_map["X"].max()
-            y_min = track_map["Y"].min()
-            y_max = track_map["Y"].max()
+        else:
+            # Show best driver per section
+
+            colour = "#" + driver_bests["TeamColour"].iloc[0]
+            benchmark_time = driver_bests[time_identifier].iloc[0]
+            hover_text = ""
+            for i in range(0, min(len(driver_bests), 5)):
+                tla = driver_bests["Tla"].iloc[i]
+                if i == 0:
+                    delta = ns_to_delta_string(benchmark_time, True)
+                else:
+                    delta = ns_to_delta_string(driver_bests[time_identifier].iloc[i] - benchmark_time)
+                line =  f"{tla}: {delta}<br>"
+                hover_text += line
+
+            fig.add_trace(
+                go.Scatter(
+                    x=track["X"],
+                    y=track["Y"],
+                    mode="lines+markers",
+                    marker_size=0.5,
+                    hoverinfo="text",
+                    hovertext=hover_text,
+                    marker_color=colour,
+                    opacity=opacity,
+                    line_width=5,
+                    line_shape="spline",
+                    customdata=[{section_identifier: section}] * len(track)
+                )
+            )
+
+    if len(filter_values(filters, "LapId")) == 1:
+        lap_number = section_times[(section_times["LapId"] == lap_id)]["NumberOfLaps"].iloc[0]
+        title_main = f"<b>{title_section} Times</b>, {tla} Lap {lap_number}"
+    else:
+        if filter_exists(filters, "LapId"):
+            title_filter = ", selected Laps"
+        else:
+            title_filter = ""
+        title_main = f"<b>Fastest Driver per {title_section}</b>{title_filter}"
+
+    if filter_exists(filters, section_identifier):
+        subtitle = f"<br><sup>Double click to clear {title_section.lower()} selection</sup>"
+    else:
+        subtitle = ""
+    
+    fig.update_layout(
+        title_text=title_main + subtitle
+    )
+
+    x_min = track_map["X"].min()
+    x_max = track_map["X"].max()
+    y_min = track_map["Y"].min()
+    y_max = track_map["Y"].max()
 
     # Extend X & Y axes a bit to fit whole map, also hide them
     x_centre = (x_min + x_max) / 2
@@ -763,7 +783,7 @@ def build_inputs_graph(data_dict, filters, client_info):
         showline=True,
         linewidth=2,
         linecolor="#B8B8BB",
-        range=[0, 1]
+        range=[0, 1.05]
     )
     
     # Get title
@@ -946,7 +966,9 @@ def build_conditions_plot(data_dict, client_info):
     fig.update_yaxes(
         tickvals = y_values,
         ticktext = y_labels,
-        showgrid=False
+        zeroline=False,
+        showgrid=False,
+        range = [0, len(y_values)]
     )
     fig.update_xaxes(
         visible=True,
@@ -958,7 +980,8 @@ def build_conditions_plot(data_dict, client_info):
     )
 
     fig.update_layout(
-        margin={"l":100, "r":100, "t":0, "b":0}
+        margin={"l":100, "r":100, "t":0, "b":0},
+        dragmode="select"
     )
 
     return fig
