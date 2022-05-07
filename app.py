@@ -76,13 +76,9 @@ dash_app.layout = html.Div(
     id="top_div",
     children=[
         dcc.Store(id="client_info", storage_type="memory"),
-        dcc.Store(id="layout_config", storage_type="memory"),
         dcc.Store(id="events_and_sessions", storage_type="memory"),
         dcc.Store(id="selected_session", storage_type="memory"),
         dcc.Store(id="loaded_session", storage_type="memory"),
-        dcc.Store(id="top_filters", storage_type="memory"),
-        dcc.Store(id="crossfilters", storage_type="memory"),
-        dcc.Store(id="time_filters", storage_type="memory"),
         dcc.Store(id="datasets", storage_type="memory"),
         dbc.Container(
             id="container",
@@ -464,6 +460,7 @@ def lap_plot_refresh(
 
 @dash_app.callback(
     Output("track_map", "figure"),
+    Output("track_map_readout", "children"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
     Input("compound_filter_dropdown", "value"),
@@ -500,7 +497,11 @@ def track_map_refresh(
             "SectorOrZoneNumber": track_map_selection,
             "TimeFilter": conditions_plot_selection
         })
-        return visuals.build_track_map(datasets, filters, client_info)
+        track_map, track_map_readout = visuals.build_track_map(datasets, filters, client_info)
+        return (
+            track_map,
+            track_map_readout
+        )
 
 
 # Stint graph

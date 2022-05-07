@@ -1,5 +1,6 @@
 import plotly.graph_objects as go
 import pandas as pd
+from dash import html
 
 
 def get_figure(client_info):
@@ -357,7 +358,7 @@ def build_track_map(data_dict, filters, client_info):
 
     if data_dict is None:
         fig = empty_figure(fig)
-        return fig
+        return fig, ""
 
     x_min = 0
     x_max = 0
@@ -365,8 +366,6 @@ def build_track_map(data_dict, filters, client_info):
     y_max = 0
 
 
-
-    # Fastest driver per zone/sector
     track_map = data_dict["track_map"]
 
     if filter_values(filters, "track_split")[0] == "zones":
@@ -391,6 +390,75 @@ def build_track_map(data_dict, filters, client_info):
     section_times.reset_index(drop=True, inplace=True)
     sections = list(section_times[section_identifier].unique())
 
+    colours = {
+        "session_best": "#b228ad",
+        "personal_best": "#0dcb0f",
+        "no_improvement": "#f7e115"
+    }
+
+    # Readout data
+    if any(field in ["SectorNumber", "ZoneNumber"] for field in filters):
+        readout_data = filter_data(section_times, filters, ["LapId"])
+        readout_time_identifier = time_identifier
+    else:
+        readout_data = filter_data(data_dict["lap_times"].copy(), filters, ignore)
+        readout_time_identifier = "LapTime"
+    
+    if len(lap_id_filter) == 1:
+        lap_id = lap_id_filter[0]
+        lap_times = readout_data.groupby(["Tla", "LapId"])[readout_time_identifier].sum().reset_index()
+        tla = lap_times[(lap_times["LapId"] == lap_id)]["Tla"].iloc[0]
+        lap_time = lap_times[(lap_times["LapId"] == lap_id)][readout_time_identifier].iloc[0]
+        personal_best = lap_times[(lap_times["Tla"] == tla)][readout_time_identifier].min()
+        session_best = lap_times[readout_time_identifier].min()
+        if lap_time == session_best:
+            colour = colours["session_best"]
+            readout_delta = []
+        elif lap_time == personal_best:
+            colour = colours["personal_best"]
+            readout_delta = [ns_to_delta_string(lap_time - session_best) + " to session best"]
+        else:
+            colour = colours["no_improvement"]
+            readout_delta = [
+                ns_to_delta_string(lap_time - personal_best) + " to personal best",
+                html.Br(),
+                ns_to_delta_string(lap_time - session_best) + " to session best"
+            ]
+        readout = [
+                "Total Time: ",
+                html.Br(),
+                html.Div(ns_to_delta_string(lap_time, True), style={"color": colour}),
+                html.Br()
+        ]
+        readout.extend(readout_delta)
+
+        
+    else:
+        readout_frame = filter_data(readout_data, filters).groupby(["Tla", "LapId", "TeamColour"])[readout_time_identifier].sum().reset_index()
+        readout_driver_bests = readout_frame.groupby(["Tla", "TeamColour"])[readout_time_identifier].min().reset_index()
+        readout_driver_bests.sort_values(readout_time_identifier, inplace=True)
+        readout_dict_list = readout_driver_bests.to_dict("records")
+        readout = []
+        for i, tla_time in enumerate(readout_dict_list):
+            time_delta = tla_time[readout_time_identifier] if i == 0 else tla_time[readout_time_identifier] - readout_dict_list[0][readout_time_identifier]
+            readout.extend(
+                [
+                    #f"{tla_time['Tla']}: {ns_to_delta_string(time_delta, i == 0)}",
+                    #html.Br()
+                    html.Tr(
+                        [
+                            html.Td(str(i + 1), style={"color": "#15151E", "background-color": "#FFFFFF"}),
+                            html.Td("▮", style={"color": "#" + tla_time["TeamColour"], "width": "10px"}),
+                            html.Td(tla_time['Tla'], style={"color": "#FFFFFF"}),
+                            html.Td(ns_to_delta_string(time_delta, i == 0), style={"color": "#FFFFFF", "background-color": "#555", "width": "80px"})
+                        ],
+                        style={"line-height": "0.8rem"}
+                    )
+                ]
+            )
+        readout = html.Table(readout, style={"background-color": "#15151E", "margin-top": "50px", "margin-left": "80px"})
+
+    # Draw map
     for section in sections:
         track = track_map[(track_map[section_identifier]) == section].copy()
         track.sort_values("SampleId", inplace=True)
@@ -404,15 +472,11 @@ def build_track_map(data_dict, filters, client_info):
         else:
             opacity = 1
 
-        if len(filter_values(filters, "LapId")) == 1:
+        if len(lap_id_filter) == 1:
             # Show time vs session/personal bests per section
 
             lap_id = lap_id_filter[0]
-            colours = {
-                "session_best": "#b228ad",
-                "personal_best": "#0dcb0f",
-                "no_improvement": "#f7e115"
-            }
+
             tla = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)]["Tla"].iloc[0]
             section_time = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)][time_identifier].iloc[0]
             personal_best = driver_bests[(driver_bests["Tla"] == tla)][time_identifier].iloc[0]
@@ -519,8 +583,10 @@ def build_track_map(data_dict, filters, client_info):
         showlegend=False
     )
 
-    return fig
-
+    return (
+        fig,
+        readout
+    )
 
 def build_stint_graph(data_dict, filters, client_info):
 
@@ -692,8 +758,6 @@ def build_inputs_graph(data_dict, filters, client_info):
 
     data = data_dict["car_data"].copy()
 
-    data = filter_data(data, filters)
-
     norms = {
         "RPM": (data["RPM"].min(), data["RPM"].max()),
         "Speed": (data["Speed"].min(), data["Speed"].max()),
@@ -701,11 +765,14 @@ def build_inputs_graph(data_dict, filters, client_info):
         "Gear": (data["Gear"].min(), data["Gear"].max())
     }
 
+    data = filter_data(data, filters)
+
     traces_colours = {
         "RPM": "#FF1E00",
         "Speed": "#b228ad",
         "Brake": "#15151E",
-        "Gear": "#0dcb0f"
+        "Gear": "#0dcb0f",
+        "Throttle": "#2972ed"
     }
 
     for trace in filters["input_trace"]:
@@ -721,7 +788,9 @@ def build_inputs_graph(data_dict, filters, client_info):
             elif trace == "RPM":
                 data["text_" + trace] = data[trace].apply(lambda x: str(x) + " RPM")
             elif trace == "Gear":
-                data["text_" + trace] = data[trace].apply(lambda x: "Gear" + str(x))
+                data["text_" + trace] = data[trace].apply(lambda x: "Gear " + str(x))
+            elif trace == "Throttle":
+                data["text_" + trace] = data[trace].apply(lambda x: "Throttle: " + str(x))
             
     first_lap_start_time = 0
     max_lap_end_time = 0

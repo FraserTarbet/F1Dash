@@ -258,8 +258,9 @@ layout_desktop = [
                                     },
                                     clear_on_unhover=True
                                 ), 
-                                xs=3
-                            )
+                                xs=2
+                            ),
+                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.70rem"}), align="start", xs=2)
                         ],
                         align="center", justify="between"
                     ),
@@ -278,9 +279,10 @@ layout_desktop = [
                                                 {"label": "RPM", "value": "RPM"},
                                                 {"label": "Speed", "value": "Speed"},
                                                 {"label": "Gear", "value": "Gear"},
+                                                {"label": "Throttle", "value": "Throttle"},
                                                 {"label": "Brake", "value": "Brake"}
                                             ], 
-                                            value=["RPM", "Speed", "Gear", "Brake"], 
+                                            value=["RPM", "Speed", "Gear", "Throttle", "Brake"], 
                                             inline=False
                                         )
                                     ]
