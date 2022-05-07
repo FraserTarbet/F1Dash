@@ -348,8 +348,8 @@ if __name__ == "__main__":
     ff.Cache.enable_cache("./ffcache")
     ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 424, False)
-    # run_transforms(pyodbc_connection, sqlalchemy_engine)
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 425, False)
+    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 425)
     # wrapper()
 
     ff.Cache.clear_cache("./ffcache")

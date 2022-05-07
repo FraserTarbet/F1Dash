@@ -496,50 +496,52 @@ BEGIN
 
 	FROM (
 
-	SELECT E.id AS EventId
-		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
-		,E.EventDate
-		,SessionName
-		,E.EventName
-		,E.OfficialEventName
+		SELECT E.id AS EventId
+			,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
+			,E.EventDate
+			,S.SessionOrder
+			,S.SessionName
+			,E.EventName
+			,E.OfficialEventName
 
-	FROM dbo.Session AS S
+		FROM dbo.Session AS S
 
-	INNER JOIN dbo.Event AS E
-	ON S.EventId = E.id
+		INNER JOIN dbo.Event AS E
+		ON S.EventId = E.id
 
-	WHERE S.LoadStatus = 1
-	AND S.TransformStatus = 1
+		WHERE S.LoadStatus = 1
+		AND S.TransformStatus = 1
 
-	UNION ALL
-	SELECT EventId
-		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
-		,E.EventDate
-		,'Practice (all)' AS SessionName
-		,E.EventName
-		,E.OfficialEventName
+		UNION ALL
+		SELECT EventId
+			,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
+			,E.EventDate
+			,MAX(S.SessionOrder) + 0.5 AS SessionOrder
+			,'Practice (all)' AS SessionName
+			,E.EventName
+			,E.OfficialEventName
 
-	FROM dbo.Session AS S
+		FROM dbo.Session AS S
 
-	INNER JOIN dbo.Event AS E
-	ON S.EventId = E.id
+		INNER JOIN dbo.Event AS E
+		ON S.EventId = E.id
 
-	WHERE S.LoadStatus = 1
-	AND S.TransformStatus = 1
-	AND LEFT(S.SessionName, 8) = 'Practice'
+		WHERE S.LoadStatus = 1
+		AND S.TransformStatus = 1
+		AND LEFT(S.SessionName, 8) = 'Practice'
 
-	GROUP BY EventId
-		,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName
-		,E.EventDate
-		,E.EventName
-		,E.OfficialEventName
+		GROUP BY EventId
+			,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName
+			,E.EventDate
+			,E.EventName
+			,E.OfficialEventName
 
-	HAVING COUNT(*) = 3
+		HAVING COUNT(*) = COUNT(CASE WHEN LEFT(S.SessionName, 8) = 'Practice' THEN 1 ELSE NULL END)
 
 	) AS S
 
 	ORDER BY EventDate DESC
-		,SessionName DESC
+		,SessionOrder DESC
 
 END
 GO

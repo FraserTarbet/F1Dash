@@ -121,13 +121,12 @@ def initiate(client_info):
 
     # Use this callback to customise layouts within container based on desktop/mobile device
 
-    is_mobile = True if client_info["isMobile"] == True else False
-    if is_mobile == True or config["ForceMobileLayout"] == "1":
+    if client_info["isMobile"]:
         layout = layouts.layout_mobile
     else:
         layout = layouts.layout_desktop
 
-    read_database.app_logging(str(client_info), "initiate", "mobile" if is_mobile else "desktop")
+    read_database.app_logging(str(client_info), "initiate", "mobile" if client_info["isMobile"] else "desktop")
 
     available_events_and_sessions = read_database.get_available_sessions().to_dict()
 

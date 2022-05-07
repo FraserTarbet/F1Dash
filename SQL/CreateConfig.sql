@@ -14,7 +14,9 @@ INSERT INTO dbo.Config_App(
 )
 VALUES
 ('ForceTestData', '1')
-,('ForceMobileLayout', '0')
 ,('DetectMobileWidth', '800')
 ,('DetectMobileHeight', '600')
 ,('MaxFileStoreSizeInGB', '2')
+,('CacheFileDeleteDelayInHours', '2')
+,('DatabaseThreadSleepInHours', '1')
+,('CacheThreadSleepInHours', '1')

@@ -261,10 +261,10 @@ def build_lap_plot(data_dict, filters, client_info):
         )
     
     compound_colour = {
-        "SOFT": "rgba(255, 30, 0, 1)",
-        "MEDIUM": "rgba(247, 225, 21, 1)",
-        "HARD": "rgba(255, 255, 255, 1)",
-        "UNKNOWN": "rgba(0, 0, 0, 1)"
+        "Soft": "rgba(255, 30, 0, 1)",
+        "Medium": "rgba(247, 225, 21, 1)",
+        "Hard": "rgba(255, 255, 255, 1)",
+        "Unknown": "rgba(0, 0, 0, 1)"
     }
 
     def colour_opacity(compound, lap_id):

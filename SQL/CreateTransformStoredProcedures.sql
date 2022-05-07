@@ -12,16 +12,9 @@ BEGIN
 		Generally creates a more useful dataset than the raw lap import provides.
 	*/
 
-	-- Use 107% rule to identify laps too slow to be clean
-	DECLARE @CleanLapTimeThreshold FLOAT
+	-- Using 107% rule per driver so that slower cars don't have lots of unclean race laps
+	DECLARE @CleanLapTimeThreshold FLOAT = 1.07
 
-	SET @CleanLapTimeThreshold = (
-		SELECT MIN(LapTime) * 1.07
-
-		FROM dbo.Lap
-
-		WHERE SessionId = @SessionId
-	)
 
 	-- Clear out existing data for this session from dbo.MergedLapData
 	DELETE
@@ -29,7 +22,7 @@ BEGIN
 	WHERE SessionId = @SessionId
 
 	-- Get existing max StintId; StintId should be unique across sessions
-	DECLARE @ExistingMaxStintId INT = (SELECT MAX(StintId) FROM dbo.MergedLapData)
+	DECLARE @ExistingMaxStintId INT = (SELECT COALESCE(MAX(StintId), 0) FROM dbo.MergedLapData)
 
 
 	-- Insert new rows
@@ -70,13 +63,14 @@ BEGIN
 			,NumberOfLaps
 			,COUNT(Lap.LapId) OVER(PARTITION BY Driver, CompId ORDER BY NumberOfLaps ASC) AS LapsInStint
 			,IsPersonalBest
-			,Compound
+			,UPPER(LEFT(Compound, 1)) + LOWER(RIGHT(Compound, LEN(Compound) - 1)) AS Compound
 			,COUNT(Lap.LapId) OVER(PARTITION BY Driver, CompId ORDER BY NumberOfLaps ASC) + TyreAgeWhenFitted AS TyreAge
 			,TrackStatus
 			,CASE
 				WHEN TrackStatus <> 'AllClear' THEN 0
-				WHEN LapTime > @CleanLapTimeThreshold THEN 0
+				WHEN LapTime > MIN(LapTime) OVER(PARTITION BY Driver) * @CleanLapTimeThreshold THEN 0
 				WHEN COALESCE(PitOutTime, PitInTime) IS NOT NULL THEN 0
+				WHEN LapTime = MIN(LapTime) OVER(PARTITION BY Driver) AND IsPersonalBest = 0 THEN 0
 				ELSE 1
 			END AS CleanLap
 			,WeatherId
@@ -509,6 +503,8 @@ BEGIN
 
 	FROM #InsertRecords
 
+	ORDER BY [Time] ASC
+
 
 	-- Update NearestNonSourceId (running after insert in order to use incremental PK)
 
@@ -759,17 +755,41 @@ BEGIN
 
 		FROM GroupFill AS A
 
-		INNER JOIN (
+		LEFT JOIN (
 			SELECT GroupStartId
 				,ROW_NUMBER() OVER(ORDER BY GroupStartId ASC) AS GroupId
 
-			FROM (SELECT DISTINCT GroupStartId FROM GroupFill) AS S
+			FROM (
+				-- Don't give Id to tiny zones
+				SELECT GroupStartId 
+				
+				FROM GroupFill 
+				
+				GROUP BY GroupStartId 
+				
+				HAVING COUNT(*) >= 5
+			) AS S
 		) AS B
 		ON A.GroupStartId = B.GroupStartId
 	)
-	SELECT *
+	-- Fill in any NULL ZoneNumber from tiny zones
+	SELECT LapId
+		,SectorNumber
+		,SampleId
+		,X
+		,Y
+		,Z
+		,InputCategory
+		,CASE
+			WHEN ZoneNumber IS NULL AND LEAD(ZoneNumber, 1, NULL) OVER(ORDER BY SampleId ASC) IS NULL THEN MAX(ZoneNumber) OVER(ORDER BY SampleId ASC)
+			WHEN ZoneNumber IS NULL THEN MIN(ZoneNumber) OVER(ORDER BY SampleId DESC)
+			ELSE ZoneNumber
+		END AS ZoneNumber
+
 	INTO #Records
 	FROM Zones
+
+
 
 	-- Delete any existing records for this @EventId
 	DELETE
@@ -812,14 +832,6 @@ CREATE PROCEDURE dbo.Update_TelemetryTrackMapping @SessionId INT, @Driver INT
 AS
 BEGIN
 	
-	/*
-		Update telemetry data with track map info - sectors and zones.
-		Based on X/Y coords; use SQL geometry functions.
-
-		Run per-driver.
-		Requires dbo.Merge_Telemetry and dbo.Merge_TrackMap to have been completed for this session/driver/event
-	*/
-
 	DECLARE @EventId INT
 		,@XMin INT
 		,@YMin INT
@@ -829,6 +841,7 @@ BEGIN
 		,@i INT
 		,@NullCount INT
 		,@SearchRadius INT
+		,@TotalZones INT
 
 	SET @EventId = (
 		SELECT EventId
@@ -866,12 +879,16 @@ BEGIN
 	-- Telemetry
 	CREATE TABLE #Tel(
 		id INT PRIMARY KEY
+		,LapId INT
+		,[Time] FLOAT
 		,X INT
 		,Y INT
 		,Point GEOMETRY
 	)
 	INSERT INTO #Tel
 	SELECT id
+		,LapId
+		,[Time]
 		,X
 		,Y
 		,GEOMETRY::STGeomFromText('POINT(' + CAST(X AS VARCHAR(MAX)) + ' ' + CAST(Y AS VARCHAR(MAX)) + ')', 0) AS Point
@@ -936,6 +953,8 @@ BEGIN
 
 	CREATE TABLE #MatchedRows(
 		id INT
+		,LapId INT
+		,[Time] FLOAT
 		,X INT
 		,Y INT
 		,Distance FLOAT
@@ -954,6 +973,8 @@ BEGIN
 		-- Match and insert
 		INSERT INTO #MatchedRows (
 			id
+			,LapId
+			,[Time]
 			,X
 			,Y
 			,Distance
@@ -963,6 +984,8 @@ BEGIN
 			,ZoneInputCategory
 		)
 		SELECT T.id
+			,T.LapId
+			,T.[Time]
 			,T.X
 			,T.Y
 			,T.Point.STDistance(M.Point) AS Distance
@@ -991,11 +1014,52 @@ BEGIN
 
 	END
 
+
+
+	-- Correct samples at start/end of lap (e.g. sometimes first sample of lap is geometrically closer to last point of final zone/sector)
+
+	SET @TotalZones = (SELECT MAX(ZoneNumber) FROM #MatchedRows)
+
+	;WITH TimeDiff AS (
+		SELECT *
+			,ABS([Time] - MIN([Time]) OVER(PARTITION BY LapId)) AS TimeToFirstSample
+			,ABS([Time] - MAX([Time]) OVER(PARTITION BY LapId)) AS TimeToLastSample
+
+		FROM #MatchedRows
+
+		WHERE ZoneNumber IN (1, @TotalZones)
+	)
+	SELECT id
+		,CASE
+			WHEN SectorNumber = 1 AND TimeToFirstSample > TimeToLastSample THEN 3
+			WHEN SectorNumber = 3 AND TimeToFirstSample < TimeToLastSample THEN 1
+			ELSE SectorNumber
+		END AS SectorNumber
+		,CASE
+			WHEN ZoneNumber = 1 AND TimeToFirstSample > TimeToLastSample THEN @TotalZones
+			WHEN ZoneNumber = @TotalZones AND TimeToFirstSample < TimeToLastSample THEN 1
+			ELSE ZoneNumber
+		END AS ZoneNumber
+
+	INTO #Overrides
+
+	FROM TimeDiff
+
+	WHERE DistanceRank = 1
+	AND (
+		(SectorNumber = 1 AND TimeToFirstSample > TimeToLastSample)
+		OR (SectorNumber = 3 AND TimeToFirstSample < TimeToLastSample)
+		OR (ZoneNumber = 1 AND TimeToFirstSample > TimeToLastSample)
+		OR (ZoneNumber = @TotalZones AND TimeToFirstSample < TimeToLastSample)
+	)
+
+
+
 	-- Update merged telemetry data
 	UPDATE T
 
-	SET T.SectorNumber = M.SectorNumber
-		,T.ZoneNumber = M.ZoneNumber
+	SET T.SectorNumber = COALESCE(O.SectorNumber, M.SectorNumber)
+		,T.ZoneNumber = COALESCE(O.ZoneNumber, M.ZoneNumber)
 		,T.ZoneInputCategory = M.ZoneInputCategory
 
 	FROM dbo.MergedTelemetry AS T
@@ -1009,8 +1073,13 @@ BEGIN
 	) AS M
 	ON T.id = M.id
 
+	LEFT JOIN #Overrides AS O
+	ON T.id = O.id
 
-	DROP TABLE #Tel, #Map, #MatchedRows
+
+
+
+	DROP TABLE #Tel, #Map, #MatchedRows, #Overrides
 
 END
 GO
@@ -1237,10 +1306,17 @@ BEGIN
 			FROM Search
 		)
 		,Nearest AS (
-			SELECT *
-				,ROW_NUMBER() OVER(PARTITION BY LapId, ZoneNumber, BeforeOrAfter ORDER BY Distance ASC) AS RN
+			SELECT D.*
+				,ROW_NUMBER() OVER(PARTITION BY D.LapId, D.ZoneNumber, D.BeforeOrAfter ORDER BY D.Distance ASC) AS RN
 
-			FROM Direction
+			FROM Direction AS D
+
+			INNER JOIN dbo.MergedLapData AS L
+			ON D.LapId = L.LapId
+
+			-- Filter out incorrect connections at very start/end of lap by comparing to lap start/end session times
+			WHERE NOT (D.ZoneNumber = 1 AND ABS(D.[Time] - L.TimeStart) > ABS(D.[Time] - L.TimeEnd))
+			AND NOT (D.ZoneNumber = @ZoneCount AND ABS(D.[Time] - L.TimeStart) < ABS(D.[Time] - L.TimeEnd))
 		)
 		SELECT *
 		INTO #Nearest
@@ -1289,6 +1365,83 @@ BEGIN
 	END
 
 
+	-- Catch null samples before first zone / after last zone, use last / first sample of previous / next lap
+
+	UPDATE LZ
+
+	SET LZ.SampleBefore = T.PreviousSampleId
+		,LZ.TimeBefore = T.PreviousSampleTime
+		,LZ.DistanceBefore = SQRT(POWER(T.PreviousSampleX - LZ.X, 2) + POWER(T.PreviousSampleY - LZ.Y, 2))
+
+	FROM #LapZones AS LZ
+
+	INNER JOIN (
+		SELECT LZ.Driver
+			,LZ.LapId
+			,LZ.ZoneNumber
+			,T.id AS PreviousSampleId
+			,T.[Time] AS PreviousSampleTime
+			,T.X AS PreviousSampleX
+			,T.Y AS PreviousSampleY
+			,ROW_NUMBER() OVER(PARTITION BY LZ.LapId, LZ.ZoneNumber ORDER BY T.[Time] DESC) AS RN
+
+		FROM #LapZones AS LZ
+
+		INNER JOIN dbo.MergedLapData AS L
+		ON LZ.Driver = L.Driver
+		AND LZ.LapNumber = L.NumberOfLaps + 1
+
+		INNER JOIN dbo.MergedTelemetry AS T
+		ON L.LapId = T.LapId
+
+		WHERE LZ.SampleBefore IS NULL
+		AND LZ.ZoneNumber = 1
+		AND T.[Source] = 'pos'
+	) AS T
+	ON LZ.LapId = T.LapId
+	AND LZ.ZoneNumber = T.ZoneNumber
+
+	WHERE T.RN = 1
+
+
+	UPDATE LZ
+
+	SET LZ.SampleBefore = T.NextSampleId
+		,LZ.TimeBefore = T.NextSampleTime
+		,LZ.DistanceBefore = SQRT(POWER(T.NextSampleX - LZ.X, 2) + POWER(T.NextSampleY - LZ.Y, 2))
+
+	FROM #LapZones AS LZ
+
+	INNER JOIN (
+		SELECT LZ.Driver
+			,LZ.LapId
+			,LZ.ZoneNumber
+			,T.id AS NextSampleId
+			,T.[Time] AS NextSampleTime
+			,T.X AS NextSampleX
+			,T.Y AS NextSampleY
+			,ROW_NUMBER() OVER(PARTITION BY LZ.LapId, LZ.ZoneNumber ORDER BY T.[Time] ASC) AS RN
+
+		FROM #LapZones AS LZ
+
+		INNER JOIN dbo.MergedLapData AS L
+		ON LZ.Driver = L.Driver
+		AND LZ.LapNumber = L.NumberOfLaps - 1
+
+		INNER JOIN dbo.MergedTelemetry AS T
+		ON L.LapId = T.LapId
+
+		WHERE LZ.SampleAfter IS NULL
+		AND LZ.ZoneNumber = @ZoneCount
+		AND T.[Source] = 'pos'
+	) AS T
+	ON LZ.LapId = T.LapId
+	AND LZ.ZoneNumber = T.ZoneNumber
+
+	WHERE T.RN = 1
+
+
+
 	-- Clear existing records for this session
 	DELETE Z
 	FROM dbo.Zone AS Z
@@ -1314,6 +1467,7 @@ BEGIN
 		FROM Interpolate
 	)
 
+
 	INSERT INTO dbo.Zone(
 		LapId
 		,ZoneNumber
@@ -1326,7 +1480,6 @@ BEGIN
 		,ZoneSessionTime
 
 	FROM Times
-
 
 
 	DROP TABLE #ZoneBreaks, #LapZones
