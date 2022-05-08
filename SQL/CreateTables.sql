@@ -44,6 +44,7 @@ CREATE TABLE dbo.Session(
 	,LoadStatusUpdatedDateTime DATETIME
 	,TransformStatus BIT
 	,TransformStatusUpdatedDateTime DATETIME
+	,AbortedLoadCount INT DEFAULT 0
 )
 CREATE NONCLUSTERED INDEX IndexEventId ON dbo.Session (EventId)
 

@@ -1,4 +1,5 @@
 import os
+import time
 
 size_limit_in_GB = 0
 
@@ -38,8 +39,24 @@ def delete_files(delete_all=False):
     return None
 
 
-def cleanup():
+def cleanup(delete_delay_in_hours):
     # Function to be called periodically to delete cache files over a given age
-    pass
+    directory = "./file_system_store/"
+    current_time = time.time()
+    delete_delay_in_seconds = delete_delay_in_hours * 60 * 60
+    to_delete = []
+    for file in os.listdir(directory):
+        atime = os.path.getatime(directory + file)
+        if current_time - atime > delete_delay_in_seconds: to_delete.append(file)
 
+    deleted_file_count = len(to_delete)
+    for file in to_delete:
+        os.remove(directory + file)
+
+    return deleted_file_count
+
+
+if __name__ == "__main__":
+    cleanup(0.1)
+        
 

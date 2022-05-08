@@ -52,6 +52,22 @@ GO
 CREATE PROCEDURE dbo.Get_SessionsToLoad @ForceEventId INT = NULL, @ForceSessionId INT = NULL
 AS
 BEGIN
+
+	DECLARE @SinceDate DATETIME = (
+		SELECT CAST([Value] + ' 00:00:00' AS DATETIME)
+
+		FROM dbo.Config_App
+
+		WHERE Parameter = 'OldestDateToLoad'
+	)
+	,@MaxAbortedLoads INT = (
+		SELECT CAST([Value] AS INT)
+
+		FROM dbo.Config_App
+
+		WHERE Parameter = 'MaxAbortedLoads'
+	)
+
 	
 	SELECT S.id AS SessionId
 		,EventId
@@ -71,6 +87,8 @@ BEGIN
 		AND SessionDate < GETDATE()
 		AND (LoadStatus = 0  OR LoadStatus IS NULL)
 		AND F1ApiSupport = 1
+		AND SessionDate >= @SinceDate
+		AND AbortedLoadCount < @MaxAbortedLoads
 	)
 	OR (
 		E.id = @ForceEventId
@@ -449,4 +467,17 @@ BEGIN
 	) AS A
 
 
+END
+
+
+DROP PROCEDURE IF EXISTS dbo.Update_IncrementAbortedLoadCount
+GO
+CREATE PROCEDURE dbo.Update_IncrementAbortedLoadCount @SessionId INT
+AS
+BEGIN
+	UPDATE dbo.Session
+
+	SET AbortedLoadCount =  AbortedLoadCount + 1
+
+	WHERE id = @SessionId
 END

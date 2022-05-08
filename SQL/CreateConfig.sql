@@ -13,10 +13,14 @@ INSERT INTO dbo.Config_App(
 	,[Value]
 )
 VALUES
-('ForceTestData', '1')
+('ForceTestData', '0')
+,('EnableDatabaseThread', '1')
+,('EnableCacheCleanupThread', '1')
+,('OldestDateToLoad', '2022-01-01')
+,('MaxAbortedLoads', '3')
 ,('DetectMobileWidth', '800')
 ,('DetectMobileHeight', '600')
 ,('MaxFileStoreSizeInGB', '2')
 ,('CacheFileDeleteDelayInHours', '2')
 ,('DatabaseThreadSleepInHours', '1')
-,('CacheThreadSleepInHours', '1')
+,('CacheThreadSleepInHours', '0.5')

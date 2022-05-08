@@ -4,6 +4,7 @@ import datetime
 import os
 import sql_connection
 
+
 pd.options.mode.chained_assignment = None
 
 
@@ -83,6 +84,8 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         data_logging(pyodbc_connection, "No sessions to update")
         return
 
+    cursor = pyodbc_connection["cursor"]
+
     sessions_data = []
     for i in range(0, len(sessions_frame)):
         wname = sessions_frame["EventName"].iloc[i]
@@ -102,56 +105,62 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
     # Get data from API, check row counts/update load status, clear down and load as required
     for session in sessions_data:
         data_logging(pyodbc_connection, f"Calling API: {session['api_string']}")
-
+        abort = False
         try:
             lap_data = ff.api.timing_data(session["api_string"])[0]
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Lap data unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             timing_data = ff.api.timing_app_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Timing data unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             car_data = ff.api.car_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Car data unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             position_data = ff.api.position_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Position data unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             track_status = ff.api.track_status_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Track status data unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             session_status = ff.api.session_status_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Session status data unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             driver_info = ff.api.driver_info(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Session driver info unavailable: {session['api_string']}")
-            continue
+            abort = True
 
         try:
             weather_data = ff.api.weather_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Session weather data unavailable: {session['api_string']}")
+            abort = True
+
+        if abort:
+            # Update aborted load count and add to log, continue to next loop iteration
+            cursor.execute("EXEC dbo.Update_IncrementAbortedLoadCount @SessionId=?", int(session["SessionId"]))
+            data_logging(pyodbc_connection, f"Data load aborted: {session['api_string']}")
             continue
 
-        cursor = pyodbc_connection["cursor"]
+        
         new_lapId = cursor.execute("SET NOCOUNT ON; EXEC dbo.Get_MaxId @TableName=?", "dbo.Lap").fetchval() + 1
 
         lap_data["SessionId"] = session["SessionId"]
@@ -273,6 +282,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
 
             cursor.execute("EXEC dbo.Update_SetNullTimes @SessionId=?", int(session["SessionId"]))
             cursor.execute("EXEC dbo.Update_SetDriverTeamOrders @SessionId=?", int(session["SessionId"]))
+            cursor.execute("EXEC dbo.Insert_MissingSectors @SessionId=?", int(session["SessionId"]))
 
             cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 0)
             cursor.commit()
@@ -345,12 +355,12 @@ def wrapper(force_eventId=None, force_sessionId=None, force_reload=False):
 if __name__ == "__main__":
     pyodbc_connection = sql_connection.get_pyodbc_connection()
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
-    ff.Cache.enable_cache("./ffcache")
-    ff.Cache.clear_cache("./ffcache")
+    #ff.Cache.enable_cache("./ffcache")
+    #ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 425, False)
-    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 425)
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 421, False)
+    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 421)
     # wrapper()
 
-    ff.Cache.clear_cache("./ffcache")
+    #ff.Cache.clear_cache("./ffcache")
 

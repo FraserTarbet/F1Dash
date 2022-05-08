@@ -3,6 +3,8 @@ from dash.exceptions import PreventUpdate
 from dash_extensions.enrich import DashProxy, ServersideOutput, ServersideOutputTransform
 import dash_bootstrap_components as dbc
 import json
+import time
+import threading
 import update_database
 import read_database
 import layouts
@@ -57,10 +59,54 @@ def filter_dict_from_inputs(input_dict):
     return filters
 
 
+def database_thread_loop(thread_sleep_in_hours):
+    thread_sleep_in_seconds = thread_sleep_in_hours * 60 * 60
+    loops = 0
+    while True:
+        # On first loop, delay to keep concurrent processing low
+        if loops == 0: time.sleep(30)
+        read_database.app_logging("app", "database_thread", f"Running database thread loop ({str(loops)})")
+        update_database.wrapper()
+        time.sleep(thread_sleep_in_seconds)
+        loops += 1
+
+
+def cache_cleanup_thread_loop(thread_sleep_in_hours, delete_delay_in_hours):
+    thread_sleep_in_seconds = thread_sleep_in_hours * 60 * 60
+    loops = 0
+    while True:
+        # On first loop, delay to keep concurrent processing low
+        if loops == 0: time.sleep(45)
+        read_database.app_logging("app", "cache_cleanup_thread", f"Running cache cleanup thread loop ({str(loops)})")
+        files_deleted = file_store.cleanup(delete_delay_in_hours)
+        if files_deleted > 0:
+            read_database.app_logging("app", "cache_cleanup_thread", f"Cache cleanup thread deleted {files_deleted} files")
+        time.sleep(thread_sleep_in_seconds)
+        loops += 1
+
+read_database.app_logging("app", "startup", "App starting")
+
 config = read_database.get_app_config()
 
 file_store.size_limit_in_GB = float(config["MaxFileStoreSizeInGB"])
 file_store.delete_files(delete_all=True)
+
+database_thread = threading.Thread(
+    target=database_thread_loop,
+    daemon=True,
+    args=(float(config["DatabaseThreadSleepInHours"]),)
+)
+database_thread.start()
+
+cache_cleanup_thread = threading.Thread(
+    target=cache_cleanup_thread_loop,
+    daemon=True,
+    args=(
+        float(config["CacheThreadSleepInHours"]),
+        float(config["CacheFileDeleteDelayInHours"])
+    )
+)
+cache_cleanup_thread.start()
 
 dash_app = DashProxy(__name__,
     meta_tags=[
@@ -641,4 +687,4 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
         
 if __name__ == "__main__":
     # Azure host will not run this
-    dash_app.run_server(debug=True)
+    dash_app.run_server(debug=False)
