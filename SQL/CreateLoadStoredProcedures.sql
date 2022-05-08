@@ -397,3 +397,56 @@ BEGIN
 
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Insert_MissingSectors
+GO
+CREATE PROCEDURE dbo.Insert_MissingSectors @SessionId INT
+AS
+BEGIN
+
+	/*
+		Occasionally the first sector time is missing for otherwise valid laps.
+		I don't know why this happens.
+		Simple enough to calculate the time based on total lap and the other two sectors and insert into sector table.
+	*/
+
+	INSERT INTO dbo.Sector(
+		LapId
+		,SectorNumber
+		,SectorTime
+		,SectorSessionTime
+	)
+	SELECT LapId
+		,1 AS SectorNumber
+		,LapTime - SectorTimeSum AS SectorTime
+		,Sector2SessionTime - (LapTime - SectorTimeSum) AS SectorSessionTime
+
+	FROM (
+
+		SELECT L.id AS LapId
+			,L.LapTime
+			,L.PitInTime
+			,L.PitOutTime
+			,SUM(S.SectorTime) AS SectorTimeSum
+			,SUM(CASE WHEN S.SectorNumber = 2 THEN S.SectorSessionTime ELSE 0 END) AS Sector2SessionTime
+
+		FROM dbo.Lap AS L
+
+		INNER JOIN dbo.Sector AS S
+		ON L.id = S.LapId
+
+		WHERE L.LapTime IS NOT NULL
+		AND L.SessionId = @SessionId
+
+		GROUP BY L.id
+			,L.LapTime
+			,L.PitInTime
+			,L.PitOutTime
+
+		HAVING COUNT(S.id) = 2
+
+	) AS A
+
+
+END
