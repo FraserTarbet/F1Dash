@@ -11,7 +11,12 @@ heights_dict = {
         "conditions_plot": "40vh"
     },
     "mobile": {
-
+        "lap_plot": "60vw",
+        "stint_graph": "50vw",
+        "track_map": "60vw",
+        "track_map_readout": "10vw",
+        "inputs_graph": "60vw",
+        "inputs_selector": "20vw"
     }
 }
 
@@ -68,6 +73,151 @@ conditions_text = [
     "Click and drag on this chart to filter the dashboard to the selected session time period."
 ]
 
+parameters_panel_children = [
+    dbc.Row(
+        [
+            dbc.Col(html.H3("F1Dash", style={"color": "#FF1E00"}), xs=12)
+        ],
+        justify="end"
+    ),
+    html.Div(
+        id="abstract_div",
+        children=[
+            dbc.Row(
+                [
+                    dbc.Col(html.P(abstract_text), style={"color": "#F7F4F1"})
+                ]
+            ),
+            dbc.Row(
+                [
+                    html.Hr(style={"color": "#F7F4F1"})
+                ]
+            ),
+        ]
+    ),
+    html.Div(
+        id="filters_div",
+        hidden=True,
+        children=[
+            html.Br(),
+            dbc.Row(
+                [
+                    dbc.Col(html.H5("Filters:"))
+                ],
+                align="center",
+                justify="start",
+                style={"margin-bottom": "5px"}
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.Label("Teams:", style={"color": "#F7F4F1"}), xs=3),
+                    dbc.Col(dcc.Dropdown(id="team_filter_dropdown", multi=True), xs=9)
+                ],
+                align="center",
+                style={"margin-bottom": "5px"}
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.Label("Drivers:", style={"color": "#F7F4F1"}), xs=3),
+                    dbc.Col(dcc.Dropdown(id="driver_filter_dropdown", multi=True), xs=9)
+                ],
+                align="center",
+                style={"margin-bottom": "5px"}
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.Label("Compounds:", style={"color": "#F7F4F1"}), xs=3),
+                    dbc.Col(dcc.Dropdown(id="compound_filter_dropdown", multi=True), xs=9)
+                ],
+                align="center",
+                style={"margin-bottom": "5px"}
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(dbc.Label("Split laps by: ", style={"color": "#F7F4F1"}), xs=4),
+                    dbc.Col(dbc.RadioItems(
+                        id="track_split_selector", 
+                        options=[{"label": "Sectors", "value": "sectors"}, {"label": "Zones", "value": "zones"}],
+                        value="sectors",
+                        inline=True,
+                        style={"color": "#F7F4F1"}
+                        ),
+                        lg = 8
+                    )
+                ],
+                align="center",
+                style={"margin-bottom": "5px"}
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(dbc.Label("Clean laps only (recommended): ", style={"color": "#F7F4F1"}), xs=9),
+                    dbc.Col(dbc.Checkbox(id="clean_laps_checkbox", value=True), xs=3)
+                ],
+                align="center",
+                style={"margin-bottom": "5px"}
+            ),
+            html.Div(
+                id="hints_div",
+                children=[
+                    dbc.Row(
+                        [
+                            html.Hr(style={"color": "#F7F4F1"})
+                        ]
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(html.P(hints_text), style={"color": "#F7F4F1"})
+                        ]
+                    )
+                ]
+            ),
+            dbc.Row(
+                [
+                    html.Hr(style={"color": "#F7F4F1"})
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.H5("Load a different session:", style={"color": "#F7F4F1"}))
+                ],
+                align="center",
+                justify="start",
+                style={"margin-bottom": "5px"}
+            )
+        ]
+    ),
+    dbc.Row(
+        [
+            dbc.Col(html.Label("Event:", style={"color": "#F7F4F1"}), xs=3),
+            dbc.Col(dbc.Select(id="event_select", size="sm"), xs=9)
+        ],
+        align="center",
+        style={"margin-bottom": "5px"}
+    ),
+    dbc.Row(
+        [
+            dbc.Col(html.Label("Session:", style={"color": "#F7F4F1"}), xs=3),
+            dbc.Col(dbc.Select(id="session_select", size="sm"), xs=9)
+        ],
+        align="center",
+        style={"margin-bottom": "5px"}
+    )
+    ,dbc.Row(
+        [
+            dbc.Col(dbc.Button(children=["Load session"], id="load_button"), xs=6),
+        ],
+        align="center",
+        justify="start",
+        style={"margin-bottom": "5px"}
+    )
+    ,dbc.Row(
+        [
+            dbc.Col(html.P(patience_text), style={"color": "#F7F4F1", "font-size": "0.75rem"})
+        ]
+    )
+]
+
+
 
 # Layouts for mobile / non-mobile devices, to be picked by initial dash callback on client load
 
@@ -78,149 +228,7 @@ layout_desktop = [
         backdrop="static",
         close_button=False,
         scrollable=True,
-        children=[
-            dbc.Row(
-                [
-                    dbc.Col(html.H3("F1Dash", style={"color": "#FF1E00"}), xs=12)
-                ],
-                justify="end"
-            ),
-            html.Div(
-                id="abstract_div",
-                children=[
-                    dbc.Row(
-                        [
-                            dbc.Col(html.P(abstract_text), style={"color": "#F7F4F1"})
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            html.Hr(style={"color": "#F7F4F1"})
-                        ]
-                    ),
-                ]
-            ),
-            html.Div(
-                id="filters_div",
-                hidden=True,
-                children=[
-                    html.Br(),
-                    dbc.Row(
-                        [
-                            dbc.Col(html.H5("Filters:"))
-                        ],
-                        align="center",
-                        justify="start",
-                        style={"margin-bottom": "5px"}
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(html.Label("Teams:", style={"color": "#F7F4F1"}), xs=3),
-                            dbc.Col(dcc.Dropdown(id="team_filter_dropdown", multi=True), xs=9)
-                        ],
-                        align="center",
-                        style={"margin-bottom": "5px"}
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(html.Label("Drivers:", style={"color": "#F7F4F1"}), xs=3),
-                            dbc.Col(dcc.Dropdown(id="driver_filter_dropdown", multi=True), xs=9)
-                        ],
-                        align="center",
-                        style={"margin-bottom": "5px"}
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(html.Label("Compounds:", style={"color": "#F7F4F1"}), xs=3),
-                            dbc.Col(dcc.Dropdown(id="compound_filter_dropdown", multi=True), xs=9)
-                        ],
-                        align="center",
-                        style={"margin-bottom": "5px"}
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(dbc.Label("Split laps by: ", style={"color": "#F7F4F1"}), xs=4),
-                            dbc.Col(dbc.RadioItems(
-                                id="track_split_selector", 
-                                options=[{"label": "Sectors", "value": "sectors"}, {"label": "Zones", "value": "zones"}],
-                                value="sectors",
-                                inline=True,
-                                style={"color": "#F7F4F1"}
-                                ),
-                                lg = 8
-                            )
-                        ],
-                        align="center",
-                        style={"margin-bottom": "5px"}
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(dbc.Label("Clean laps only (recommended): ", style={"color": "#F7F4F1"}), xs=9),
-                            dbc.Col(dbc.Checkbox(id="clean_laps_checkbox", value=True), xs=3)
-                        ],
-                        align="center",
-                        style={"margin-bottom": "5px"}
-                    ),
-                    html.Div(
-                        id="hints_div",
-                        children=[
-                            dbc.Row(
-                                [
-                                    html.Hr(style={"color": "#F7F4F1"})
-                                ]
-                            ),
-                            dbc.Row(
-                                [
-                                    dbc.Col(html.P(hints_text), style={"color": "#F7F4F1"})
-                                ]
-                            )
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            html.Hr(style={"color": "#F7F4F1"})
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(html.H5("Load a different session:", style={"color": "#F7F4F1"}))
-                        ],
-                        align="center",
-                        justify="start",
-                        style={"margin-bottom": "5px"}
-                    )
-                ]
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(html.Label("Event:", style={"color": "#F7F4F1"}), xs=3),
-                    dbc.Col(dbc.Select(id="event_select", size="sm"), xs=9)
-                ],
-                align="center",
-                style={"margin-bottom": "5px"}
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(html.Label("Session:", style={"color": "#F7F4F1"}), xs=3),
-                    dbc.Col(dbc.Select(id="session_select", size="sm"), xs=9)
-                ],
-                align="center",
-                style={"margin-bottom": "5px"}
-            )
-            ,dbc.Row(
-                [
-                    dbc.Col(dbc.Button(children=["Load session"], id="load_button"), xs=6),
-                ],
-                align="center",
-                justify="start",
-                style={"margin-bottom": "5px"}
-            )
-            ,dbc.Row(
-                [
-                    dbc.Col(html.P(patience_text), style={"color": "#F7F4F1", "font-size": "0.75rem"})
-                ]
-            )
-        ]
+        children=parameters_panel_children
     ),
     html.Div(
         id="dashboard_div",
@@ -247,17 +255,25 @@ layout_desktop = [
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(dcc.Graph(id="lap_plot", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_upper"]}), xs=8),
                             dbc.Col(
-                                dcc.Graph(
-                                    id="track_map", 
-                                    config={"displayModeBar": False}, 
-                                    style={
-                                        "height": heights_dict["desktop"]["visuals_upper"], 
-                                        "width": heights_dict["desktop"]["visuals_upper"]
-                                    },
-                                    clear_on_unhover=True
-                                ), 
+                                [
+                                    dcc.Graph(id="lap_plot", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_upper"]}),
+                                    html.Div(dcc.Loading(id="lap_plot_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ], xs=8
+                            ),
+                            dbc.Col(
+                                [
+                                    dcc.Graph(
+                                        id="track_map", 
+                                        config={"displayModeBar": False}, 
+                                        style={
+                                            "height": heights_dict["desktop"]["visuals_upper"], 
+                                            "width": heights_dict["desktop"]["visuals_upper"]
+                                        },
+                                        clear_on_unhover=True
+                                    ),
+                                    html.Div(dcc.Loading(id="track_map_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ],
                                 xs=2
                             ),
                             dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.70rem"}), align="start", xs=2)
@@ -266,8 +282,20 @@ layout_desktop = [
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(dcc.Graph(id="stint_graph", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_lower"]}), xs=5),
-                            dbc.Col(dcc.Graph(id="inputs_graph", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_lower"]}), xs=6),
+                            dbc.Col(
+                                [
+                                    dcc.Graph(id="stint_graph", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_lower"]}),
+                                    html.Div(dcc.Loading(id="stint_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ],
+                                xs=5
+                            ),
+                            dbc.Col(
+                                [
+                                    dcc.Graph(id="inputs_graph", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_lower"]}),
+                                    html.Div(dcc.Loading(id="inputs_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ], 
+                                xs=6
+                            ),
                             dbc.Col(
                                 html.Div(
                                     id="input_trace_selector_div",
@@ -333,7 +361,126 @@ layout_desktop = [
 
 
 layout_mobile = [
-    html.Div("This is the mobile layout")
+    dbc.Offcanvas(
+        id="parameters_panel",
+        is_open=True,
+        backdrop="static",
+        close_button=False,
+        scrollable=True,
+        children=parameters_panel_children,
+        style={"max-width": "80vw", "font-size": "0.75rem"}
+    ),
+    html.Div(
+        id="dashboard_div",
+        hidden=True,
+        children=[
+            html.Div(
+                id="visuals_div",
+                children=[
+                    html.Div(
+                        id="headings_div",
+                        children=[
+                            html.Div(id="upper_heading", hidden=True),
+                            dbc.Row(dbc.Col(html.H1(id="lower_heading"), xs=12)),
+                            html.Hr(),
+                            dbc.Row(
+                                [
+                                    dbc.Col(dbc.Button(id="open_parameters_button", children="Open Filters", size="sm"), xs=4),
+                                    dbc.Col(html.P(short_abstract_text, style={"font-size": "0.75rem"}), xs=8)
+                                ]
+                            )
+                        ]
+                    ),
+                    dbc.Row(
+                        dbc.Col(
+                            [
+                                dcc.Graph(id="lap_plot", config={"displayModeBar": False}, style={"height": heights_dict["mobile"]["lap_plot"]}),
+                                html.Div(dcc.Loading(id="lap_plot_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                            ],
+                            xs=12
+                        )                      
+                    ),
+                    dbc.Row(
+                        dbc.Col(
+                            [
+                                dcc.Graph(id="stint_graph", config={"displayModeBar": False}, style={"height": heights_dict["mobile"]["stint_graph"]}),
+                                html.Div(dcc.Loading(id="stint_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                            ],
+                            xs=12
+                        )
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    dcc.Graph(
+                                        id="track_map", 
+                                        config={"displayModeBar": False}, 
+                                        style={
+                                            "height": heights_dict["mobile"]["track_map"], 
+                                            "width": heights_dict["mobile"]["track_map"]
+                                        },
+                                        clear_on_unhover=True
+                                    ),
+                                    html.Div(dcc.Loading(id="track_map_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ],
+                                xs=7
+                            ),
+                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.60rem"}), align="start", xs=5)
+                        ],
+                        justify="start"
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    dcc.Graph(id="inputs_graph", config={"displayModeBar": False}, style={"height": heights_dict["mobile"]["inputs_graph"]}),
+                                    html.Div(dcc.Loading(id="inputs_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ], 
+                                xs=10
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    id="input_trace_selector_div",
+                                    hidden=True,
+                                    children=[
+                                        dbc.Checklist(
+                                            id="input_trace_selector", 
+                                            options=[
+                                                {"label": "RPM", "value": "RPM"},
+                                                {"label": "Speed", "value": "Speed"},
+                                                {"label": "Gear", "value": "Gear"},
+                                                {"label": "Throttle", "value": "Throttle"},
+                                                {"label": "Brake", "value": "Brake"}
+                                            ], 
+                                            value=["RPM", "Speed", "Gear", "Throttle", "Brake"], 
+                                            inline=False
+                                        )
+                                    ]
+                                ),
+                                xs=2,
+                                align="center"
+                            )
+                        ]
+                    )
+                ]
+            ),
+            html.Div(
+                hidden=True,
+                children=[
+                    dbc.Button(id="open_conditions_button"),
+                    dbc.Offcanvas(
+                        id="conditions_panel",
+                        is_open=False,
+                        children=[
+                            dcc.Graph(id="conditions_plot")
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
 ]
 
 

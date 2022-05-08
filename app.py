@@ -420,6 +420,7 @@ def compound_filter_dropdown_refresh(datasets):
 
 @dash_app.callback(
     Output("lap_plot", "figure"),
+    Output("lap_plot_loading", "children"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
     Input("compound_filter_dropdown", "value"),
@@ -442,7 +443,10 @@ def lap_plot_refresh(
     client_info
 ):
     if datasets is None:
-        return visuals.build_lap_plot(datasets, [], client_info)
+        return (
+            visuals.build_lap_plot(datasets, [], client_info),
+            False
+        )
     else:
         filters = filter_dict_from_inputs({
             "TeamName": team_filter_values,
@@ -453,7 +457,10 @@ def lap_plot_refresh(
             "SectorOrZoneNumber": track_map_selection,
             "TimeFilter": conditions_plot_selection
         })
-        return visuals.build_lap_plot(datasets, filters, client_info)
+        return (
+            visuals.build_lap_plot(datasets, filters, client_info),
+            True
+        )
 
 
 # Track map
@@ -461,6 +468,7 @@ def lap_plot_refresh(
 @dash_app.callback(
     Output("track_map", "figure"),
     Output("track_map_readout", "children"),
+    Output("track_map_loading", "children"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
     Input("compound_filter_dropdown", "value"),
@@ -485,7 +493,12 @@ def track_map_refresh(
     client_info
 ):
     if datasets is None:
-        return visuals.build_track_map(datasets, [], client_info)
+        figure, readout = visuals.build_track_map(datasets, [], client_info)
+        return (
+            figure,
+            readout,
+            False
+        )
     else:
         filters = filter_dict_from_inputs({
             "TeamName": team_filter_values,
@@ -500,7 +513,8 @@ def track_map_refresh(
         track_map, track_map_readout = visuals.build_track_map(datasets, filters, client_info)
         return (
             track_map,
-            track_map_readout
+            track_map_readout,
+            True
         )
 
 
@@ -508,6 +522,7 @@ def track_map_refresh(
 
 @dash_app.callback(
     Output("stint_graph", "figure"),
+    Output("stint_graph_loading", "children"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
     Input("compound_filter_dropdown", "value"),
@@ -530,7 +545,10 @@ def stint_graph_refresh(
     client_info
 ):
     if datasets is None:
-        return visuals.build_stint_graph(datasets, [], client_info)
+        return (
+            visuals.build_stint_graph(datasets, [], client_info),
+            False
+        )
     else:
         filters = filter_dict_from_inputs({
             "TeamName": team_filter_values,
@@ -542,7 +560,10 @@ def stint_graph_refresh(
             "SectorOrZoneNumber": track_map_selection,
             "TimeFilter": conditions_plot_selection
         })
-        return visuals.build_stint_graph(datasets, filters, client_info)
+        return (
+            visuals.build_stint_graph(datasets, filters, client_info),
+            True
+        )
 
 
 # Inputs graph
@@ -550,6 +571,7 @@ def stint_graph_refresh(
 @dash_app.callback(
     Output("inputs_graph", "figure"),
     Output("input_trace_selector_div", "hidden"),
+    Output("inputs_graph_loading", "children"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
     Input("compound_filter_dropdown", "value"),
@@ -575,7 +597,8 @@ def inputs_graph_refresh(
         figure, data_displayed = visuals.build_inputs_graph(datasets, [], client_info)
         return (
             figure,
-            True
+            True,
+            False
         )
     else:
         filters = filter_dict_from_inputs({
@@ -590,7 +613,8 @@ def inputs_graph_refresh(
         figure, data_displayed = visuals.build_inputs_graph(datasets, filters, client_info)
         return (
             figure,
-            not data_displayed
+            not data_displayed,
+            True
         )
 
 

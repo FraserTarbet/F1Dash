@@ -20,8 +20,8 @@ def get_figure(client_info):
         margin={
             "l": 10,
             "r": 10,
-            "t": 50,
-            "b": 10
+            "t": 55,
+            "b": 5
         }
     )
 
@@ -37,7 +37,11 @@ def get_figure(client_info):
     if client_info["isMobile"]:
         # Disable more functionality
         fig.update_layout(
-            dragmode=False
+            dragmode=False,
+            margin={
+                "l": 0,
+                "r": 0
+            }
         )
 
     client_height = client_info["height"]
@@ -157,6 +161,7 @@ def get_time_axis_ticks(time_min, time_max):
     one_second = 1000000000
 
     tick_spacings = [
+        one_second * 0.01,
         one_second * 0.05,
         one_second * 0.1,
         one_second * 0.5,
@@ -235,7 +240,7 @@ def build_lap_plot(data_dict, filters, client_info):
     if filter_exists(filters, "LapId"):
         subtitle = "<br><sup>Double click to clear lap selection</sup>"
     else:
-        subtitle = ""
+        subtitle = "<br><sup>Select points to cross filter by lap</sup>"
 
     title = f"<b>{title_measure} Times </b>{title_values_string}{subtitle}"
     fig.update_layout(
@@ -265,7 +270,9 @@ def build_lap_plot(data_dict, filters, client_info):
         "Soft": "rgba(255, 30, 0, 1)",
         "Medium": "rgba(247, 225, 21, 1)",
         "Hard": "rgba(255, 255, 255, 1)",
-        "Unknown": "rgba(0, 0, 0, 1)"
+        "Unknown": "rgba(0, 0, 0, 1)",
+        "Intermediate": "rgba(13, 203, 15, 1)",
+        "Wet": "rgba(41, 114, 237, 1)"
     }
 
     def colour_opacity(compound, lap_id):
@@ -335,7 +342,8 @@ def build_lap_plot(data_dict, filters, client_info):
     fig.update_yaxes(
         tickvals=tick_values,
         ticktext=tick_labels,
-        range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
+        #range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
+        range=[tick_values[-1] * 1.001, tick_values[0] * 0.998],
         zeroline=False,
         gridwidth=0.25,
         linewidth=2,
@@ -416,22 +424,24 @@ def build_track_map(data_dict, filters, client_info):
             readout_delta = []
         elif lap_time == personal_best:
             colour = colours["personal_best"]
-            readout_delta = [ns_to_delta_string(lap_time - session_best) + " to session best"]
+            readout_delta = [html.Tr(html.Td(ns_to_delta_string(lap_time - session_best) + " to session best"))]
         else:
             colour = colours["no_improvement"]
             readout_delta = [
-                ns_to_delta_string(lap_time - personal_best) + " to personal best",
-                html.Br(),
-                ns_to_delta_string(lap_time - session_best) + " to session best"
+                html.Tr(html.Td(ns_to_delta_string(lap_time - personal_best) + " to personal best", colSpan=2)),
+                html.Tr(html.Td(ns_to_delta_string(lap_time - session_best) + " to session best", colSpan=2))
             ]
         readout = [
-                "Total Time: ",
-                html.Br(),
-                html.Div(ns_to_delta_string(lap_time, True), style={"color": colour}),
-                html.Br()
+                html.Tr(
+                    [
+                        html.Td("Total Time: "),
+                        html.Td(ns_to_delta_string(lap_time, True), style={"color": colour})
+                    ],
+                    style={"background-color": "#15151E"}
+                )
         ]
         readout.extend(readout_delta)
-
+        readout = html.Table(readout, style={"color": "#FFFFFF", "background-color": "#555", "margin-top": "50px", "margin-left": "50px", "width": "150px", "font-size": "0.75rem"})
         
     else:
         readout_frame = filter_data(readout_data, filters).groupby(["Tla", "LapId", "TeamColour"])[readout_time_identifier].sum().reset_index()
@@ -443,20 +453,18 @@ def build_track_map(data_dict, filters, client_info):
             time_delta = tla_time[readout_time_identifier] if i == 0 else tla_time[readout_time_identifier] - readout_dict_list[0][readout_time_identifier]
             readout.extend(
                 [
-                    #f"{tla_time['Tla']}: {ns_to_delta_string(time_delta, i == 0)}",
-                    #html.Br()
                     html.Tr(
                         [
-                            html.Td(str(i + 1), style={"color": "#15151E", "background-color": "#FFFFFF"}),
+                            html.Td(str(i + 1), style={"color": "#15151E", "background-color": "#FFFFFF", "border": "1px solid black", "border-radius": "2px"}),
                             html.Td("▮", style={"color": "#" + tla_time["TeamColour"], "width": "10px"}),
                             html.Td(tla_time['Tla'], style={"color": "#FFFFFF"}),
                             html.Td(ns_to_delta_string(time_delta, i == 0), style={"color": "#FFFFFF", "background-color": "#555", "width": "80px"})
                         ],
-                        style={"line-height": "0.8rem"}
+                        style={"line-height": "1.5vh"}
                     )
                 ]
             )
-        readout = html.Table(readout, style={"background-color": "#15151E", "margin-top": "50px", "margin-left": "80px"})
+        readout = html.Table(readout, style={"background-color": "#15151E", "margin-top": "1.5vh", "margin-left": "50px"})
 
     # Draw map
     for section in sections:
@@ -552,7 +560,7 @@ def build_track_map(data_dict, filters, client_info):
     if filter_exists(filters, section_identifier):
         subtitle = f"<br><sup>Double click to clear {title_section.lower()} selection</sup>"
     else:
-        subtitle = ""
+        subtitle = f"<br><sup>Select sections to cross filter by {title_section.lower()}</sup>"
     
     fig.update_layout(
         title_text=title_main + subtitle
@@ -725,12 +733,18 @@ def build_stint_graph(data_dict, filters, client_info):
     fig.update_yaxes(
         tickvals=tick_values,
         ticktext=tick_labels,
-        range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
+        #range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
+        range=[tick_values[-1] * 1.001, tick_values[0] * 0.999],
         zeroline=False,
         gridwidth=0.2
     )
     fig.update_xaxes(
         title = x_title
+    )
+
+    fig.update_layout(
+        dragmode=False,
+        clickmode="none"
     )
 
     return fig
@@ -883,6 +897,11 @@ def build_inputs_graph(data_dict, filters, client_info):
     fig.update_layout(
         title_text=title,
         showlegend=True
+    )
+
+    fig.update_layout(
+        dragmode=False,
+        clickmode="none"
     )
 
     return fig, True
