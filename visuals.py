@@ -697,8 +697,9 @@ def build_stint_graph(data_dict, filters, client_info):
             go.Scatter(
                 x=trace_data[x_field],
                 y=trace_data[time_field],
-                mode="lines",
+                mode="lines+markers",
                 marker_color=colour,
+                marker_size = 4,
                 hoverinfo="text",
                 hovertext=trace_data["Tla"] + ": " + trace_data["text"],
                 line={"dash": dash_style},
