@@ -276,9 +276,9 @@ layout_desktop = [
                                 ],
                                 xs=2
                             ),
-                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.70rem"}), align="start", xs=2)
+                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.70rem", "margin-left": "30px"}), align="start", xs=2)
                         ],
-                        align="center", justify="between"
+                        align="center", justify="evenly"
                     ),
                     dbc.Row(
                         [
