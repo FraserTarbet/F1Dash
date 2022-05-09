@@ -414,13 +414,14 @@ def open_conditions_panel(click, client_info):
 
 @dash_app.callback(
     Output("team_filter_dropdown", "options"),
+    Output("team_filter_dropdown", "value"),
     Input("datasets", "data")
 )
 def team_filter_dropdown_refresh(datasets):
     if datasets is None:
-        return no_update
+        return no_update, no_update
     else:
-        return visuals.get_filter_options(datasets["session_drivers"], {}, ("TeamName", "TeamName"))
+        return visuals.get_filter_options(datasets["session_drivers"], {}, ("TeamName", "TeamName")), []
 
 @dash_app.callback(
     Output("driver_filter_dropdown", "options"),
@@ -437,12 +438,14 @@ def driver_filter_dropdown_refresh(team_filter_values, datasets):
 @dash_app.callback(
     Output("driver_filter_dropdown", "value"),
     Input("team_filter_dropdown", "value"),
-    State("driver_filter_dropdown", "value"),
-    State("datasets", "data")
+    Input("datasets", "data"),
+    State("driver_filter_dropdown", "value")
 )
-def driver_filter_values_refresh(team_filter_values, driver_filter_values, datasets):
-    if team_filter_values is None or team_filter_values == [] or driver_filter_values is None or driver_filter_values == []:
+def driver_filter_values_refresh(team_filter_values, datasets, driver_filter_values):
+    if (team_filter_values is None or team_filter_values == []) and (driver_filter_values is None or driver_filter_values == []):
         return no_update
+    elif callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
+        return []
     else:
         session_drivers = datasets["session_drivers"]
         valid_drivers = list(session_drivers[(session_drivers["TeamName"].isin(driver_filter_values))]["RacingNumber"])
@@ -450,13 +453,14 @@ def driver_filter_values_refresh(team_filter_values, driver_filter_values, datas
 
 @dash_app.callback(
     Output("compound_filter_dropdown", "options"),
+    Output("compound_filter_dropdown", "value"),
     Input("datasets", "data")
 )
 def compound_filter_dropdown_refresh(datasets):
     if datasets is None:
-        return no_update
+        return no_update, no_update
     else:
-        return visuals.get_filter_options(datasets["lap_times"], {}, ("Compound", "Compound"))
+        return visuals.get_filter_options(datasets["lap_times"], {}, ("Compound", "Compound")), []
 
 
 
@@ -494,15 +498,20 @@ def lap_plot_refresh(
             False
         )
     else:
-        filters = filter_dict_from_inputs({
-            "TeamName": team_filter_values,
-            "Driver": driver_filter_values,
-            "Compound": compound_filter_values,
-            "CleanLap": clean_laps_filter_values,
-            "LapId": lap_plot_selection,
-            "SectorOrZoneNumber": track_map_selection,
-            "TimeFilter": conditions_plot_selection
-        })
+        if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
+            filters = filter_dict_from_inputs({
+                "CleanLap": clean_laps_filter_values
+            })
+        else:
+            filters = filter_dict_from_inputs({
+                "TeamName": team_filter_values,
+                "Driver": driver_filter_values,
+                "Compound": compound_filter_values,
+                "CleanLap": clean_laps_filter_values,
+                "LapId": lap_plot_selection,
+                "SectorOrZoneNumber": track_map_selection,
+                "TimeFilter": conditions_plot_selection
+            })
         return (
             visuals.build_lap_plot(datasets, filters, client_info),
             True
@@ -546,16 +555,22 @@ def track_map_refresh(
             False
         )
     else:
-        filters = filter_dict_from_inputs({
-            "TeamName": team_filter_values,
-            "Driver": driver_filter_values,
-            "Compound": compound_filter_values,
-            "track_split": track_split_values,
-            "CleanLap": clean_laps_filter_values,
-            "LapId": lap_plot_selection,
-            "SectorOrZoneNumber": track_map_selection,
-            "TimeFilter": conditions_plot_selection
-        })
+        if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
+            filters = filter_dict_from_inputs({
+                "CleanLap": clean_laps_filter_values,
+                "track_split": track_split_values
+            })
+        else:
+            filters = filter_dict_from_inputs({
+                "TeamName": team_filter_values,
+                "Driver": driver_filter_values,
+                "Compound": compound_filter_values,
+                "track_split": track_split_values,
+                "CleanLap": clean_laps_filter_values,
+                "LapId": lap_plot_selection,
+                "SectorOrZoneNumber": track_map_selection,
+                "TimeFilter": conditions_plot_selection
+            })
         track_map, track_map_readout = visuals.build_track_map(datasets, filters, client_info)
         return (
             track_map,
@@ -596,16 +611,21 @@ def stint_graph_refresh(
             False
         )
     else:
-        filters = filter_dict_from_inputs({
-            "TeamName": team_filter_values,
-            "Driver": driver_filter_values,
-            "Compound": compound_filter_values,
-            "CleanLap": clean_laps_filter_values,
-            "LapId": lap_plot_selection,
-            "StintId": lap_plot_selection,
-            "SectorOrZoneNumber": track_map_selection,
-            "TimeFilter": conditions_plot_selection
-        })
+        if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
+            filters = filter_dict_from_inputs({
+                "CleanLap": clean_laps_filter_values
+            })
+        else:
+            filters = filter_dict_from_inputs({
+                "TeamName": team_filter_values,
+                "Driver": driver_filter_values,
+                "Compound": compound_filter_values,
+                "CleanLap": clean_laps_filter_values,
+                "LapId": lap_plot_selection,
+                "StintId": lap_plot_selection,
+                "SectorOrZoneNumber": track_map_selection,
+                "TimeFilter": conditions_plot_selection
+            })
         return (
             visuals.build_stint_graph(datasets, filters, client_info),
             True
@@ -647,15 +667,21 @@ def inputs_graph_refresh(
             False
         )
     else:
-        filters = filter_dict_from_inputs({
-            "TeamName": team_filter_values,
-            "Driver": driver_filter_values,
-            "Compound": compound_filter_values,
-            "CleanLap": clean_laps_filter_values,
-            "LapId": lap_plot_selection,
-            "SectorOrZoneNumber": track_map_selection,
-            "input_trace": input_trace_selector_values
-        })
+        if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
+            filters = filter_dict_from_inputs({
+                "CleanLap": clean_laps_filter_values,
+                "input_trace": input_trace_selector_values
+            })
+        else:
+            filters = filter_dict_from_inputs({
+                "TeamName": team_filter_values,
+                "Driver": driver_filter_values,
+                "Compound": compound_filter_values,
+                "CleanLap": clean_laps_filter_values,
+                "LapId": lap_plot_selection,
+                "SectorOrZoneNumber": track_map_selection,
+                "input_trace": input_trace_selector_values
+            })
         figure, data_displayed = visuals.build_inputs_graph(datasets, filters, client_info)
         return (
             figure,
