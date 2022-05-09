@@ -13,6 +13,7 @@ BEGIN
 	*/
 
 	-- Using 107% rule per driver so that slower cars don't have lots of unclean race laps
+	-- Also partitioning by compound to handle changing conditions during a session.
 	DECLARE @CleanLapTimeThreshold FLOAT = 1.07
 
 
@@ -68,7 +69,7 @@ BEGIN
 			,TrackStatus
 			,CASE
 				WHEN TrackStatus <> 'AllClear' THEN 0
-				WHEN LapTime > MIN(LapTime) OVER(PARTITION BY Driver) * @CleanLapTimeThreshold THEN 0
+				WHEN LapTime > MIN(LapTime) OVER(PARTITION BY Driver, Compound) * @CleanLapTimeThreshold THEN 0
 				WHEN COALESCE(PitOutTime, PitInTime) IS NOT NULL THEN 0
 				WHEN LapTime = MIN(LapTime) OVER(PARTITION BY Driver) AND IsPersonalBest = 0 THEN 0
 				ELSE 1

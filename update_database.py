@@ -189,7 +189,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         # Speed trap
         speed_trap_frames = []
         for i in ["I1", "I2", "FL", "ST"]:
-            speed_trap_frame = lap_data[["id", "Speed" + i]][(~lap_data["Speed" + i].isnull())]
+            speed_trap_frame = lap_data[["id", "Speed" + i]][(~lap_data["Speed" + i].isnull()) & (~lap_data["NumberOfLaps"].isnull())]
             if len(speed_trap_frame) == 0: continue
             speed_trap_frame.rename(columns={"id": "LapId", "Speed" + i: "Speed"}, inplace=True)
             speed_trap_frame["SpeedTrapPoint"] = i
@@ -303,7 +303,7 @@ def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, for
     for i in range(0, len(sessions_frame)):
         session_dicts.append({
             "SessionId": sessions_frame["SessionId"].iloc[i],
-            "EventId": sessions_frame["EventId"].iloc[0]
+            "EventId": sessions_frame["EventId"].iloc[i]
         })
 
     if len(session_dicts) > 0:
@@ -358,9 +358,47 @@ if __name__ == "__main__":
     #ff.Cache.enable_cache("./ffcache")
     #ff.Cache.clear_cache("./ffcache")
     # refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    # load_session_data(pyodbc_connection, sqlalchemy_engine, 87, 421, False)
-    run_transforms(pyodbc_connection, sqlalchemy_engine, 87, 421)
+    # load_session_data(pyodbc_connection, sqlalchemy_engine, 90, 554, False)
+    # run_transforms(pyodbc_connection, sqlalchemy_engine, 90, 554)
     # wrapper()
 
     #ff.Cache.clear_cache("./ffcache")
 
+
+    # cursor = pyodbc_connection["cursor"]
+    # eventId_sessionId = [
+    #     (88, 541),
+    #     (88, 542),
+    #     (88, 543),
+    #     (88, 544),
+    #     (88, 545),
+    #     (89, 546),
+    #     (89, 547),
+    #     (89, 548),
+    #     (89, 549),
+    #     (89, 550),
+    #     (90, 551),
+    #     (90, 552),
+    #     (90, 553),
+
+    #     (90, 555),
+    #     (91, 556),
+    #     (91, 557),
+    #     (91, 558),
+    #     (91, 559)
+    # ]
+
+    # for eventId, sessionId in eventId_sessionId:
+
+    #     drivers = list(pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_SessionDrivers @SessionId = {sessionId}", sqlalchemy_engine)["RacingNumber"])
+
+    #     cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_TrackMap @EventId=?", int(eventId))
+    #     data_logging(pyodbc_connection, f"Ran Merge_TrackMap for SessionId {sessionId}")
+
+    #     data_logging(pyodbc_connection, f"Starting Update_TelemetryTrackMapping for SessionId {sessionId}")
+    #     for i, driver in enumerate(drivers):
+    #         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_TelemetryTrackMapping @SessionId=?, @Driver=?", int(sessionId), int(driver))
+    #         data_logging(pyodbc_connection, f"Ran Update_TelemetryTrackMapping for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
+
+    #     cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Zone @SessionId=?", int(sessionId))
+    #     data_logging(pyodbc_connection, f"Ran Merge_Zone for SessionId {sessionId}")

@@ -18,6 +18,7 @@ VALUES
 ,('EnableCacheCleanupThread', '1')
 ,('OldestDateToLoad', '2022-01-01')
 ,('MaxAbortedLoads', '3')
+,('HoursToWaitBeforeLoading', '2')
 ,('DetectMobileWidth', '800')
 ,('DetectMobileHeight', '600')
 ,('MaxFileStoreSizeInGB', '2')

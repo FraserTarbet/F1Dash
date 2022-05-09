@@ -513,7 +513,7 @@ BEGIN
 		AND S.TransformStatus = 1
 
 		UNION ALL
-		SELECT EventId
+		SELECT S.EventId
 			,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName AS EventLabel
 			,E.EventDate
 			,MAX(S.SessionOrder) + 0.5 AS SessionOrder
@@ -523,6 +523,18 @@ BEGIN
 
 		FROM dbo.Session AS S
 
+		INNER JOIN (
+			SELECT EventId
+				,COUNT(*) AS TotalPracticeSessions
+
+			FROM dbo.Session
+
+			WHERE LEFT(SessionName, 8) = 'Practice'
+
+			GROUP BY EventId
+		) AS P
+		ON S.EventId = P.EventId
+
 		INNER JOIN dbo.Event AS E
 		ON S.EventId = E.id
 
@@ -530,13 +542,14 @@ BEGIN
 		AND S.TransformStatus = 1
 		AND LEFT(S.SessionName, 8) = 'Practice'
 
-		GROUP BY EventId
+		GROUP BY S.EventId
 			,CAST(YEAR(EventDate) AS VARCHAR(4)) + ': ' + E.EventName
 			,E.EventDate
 			,E.EventName
 			,E.OfficialEventName
+			,P.TotalPracticeSessions
 
-		HAVING COUNT(*) = COUNT(CASE WHEN LEFT(S.SessionName, 8) = 'Practice' THEN 1 ELSE NULL END)
+		HAVING COUNT(*) = P.TotalPracticeSessions
 
 	) AS S
 

@@ -67,6 +67,13 @@ BEGIN
 
 		WHERE Parameter = 'MaxAbortedLoads'
 	)
+	,@HoursToWaitBeforeLoading INT = (
+		SELECT CAST([Value] AS INT)
+
+		FROM dbo.Config_App
+
+		WHERE Parameter = 'HoursToWaitBeforeLoading'
+	)
 
 	
 	SELECT S.id AS SessionId
@@ -81,10 +88,14 @@ BEGIN
 	INNER JOIN dbo.Event AS E
 	ON S.EventId = E.id
 
+	LEFT JOIN dbo.UTCOffsets AS O
+	ON E.Country = O.Country
+	AND E.Location = O.Location
+
 	WHERE (
 		@ForceEventId IS NULL
 		AND @ForceSessionId IS NULL
-		AND SessionDate < GETDATE()
+		AND DATEADD(HOUR, COALESCE(O.UTCOffset, 0) + @HoursToWaitBeforeLoading, SessionDate) < GETDATE()
 		AND (LoadStatus = 0  OR LoadStatus IS NULL)
 		AND F1ApiSupport = 1
 		AND SessionDate >= @SinceDate

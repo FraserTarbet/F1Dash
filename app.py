@@ -96,7 +96,7 @@ database_thread = threading.Thread(
     daemon=True,
     args=(float(config["DatabaseThreadSleepInHours"]),)
 )
-database_thread.start()
+#database_thread.start()
 
 cache_cleanup_thread = threading.Thread(
     target=cache_cleanup_thread_loop,
@@ -106,7 +106,7 @@ cache_cleanup_thread = threading.Thread(
         float(config["CacheFileDeleteDelayInHours"])
     )
 )
-cache_cleanup_thread.start()
+#cache_cleanup_thread.start()
 
 dash_app = DashProxy(__name__,
     meta_tags=[
@@ -687,4 +687,4 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
         
 if __name__ == "__main__":
     # Azure host will not run this
-    dash_app.run_server(debug=False)
+    dash_app.run_server(debug=True)
