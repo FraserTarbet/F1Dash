@@ -339,11 +339,11 @@ def build_lap_plot(data_dict, filters, client_info):
 
     # Update Y axis
     tick_values, tick_labels = get_time_axis_ticks(min_lap_time, max_lap_time)
+    range_extend = (tick_values[-1] - tick_values[0]) * 0.1
     fig.update_yaxes(
         tickvals=tick_values,
         ticktext=tick_labels,
-        #range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
-        range=[tick_values[-1] * 1.001, tick_values[0] * 0.998],
+        range=[tick_values[-1] + range_extend, tick_values[0] - range_extend],
         zeroline=False,
         gridwidth=0.25,
         linewidth=2,
@@ -731,11 +731,11 @@ def build_stint_graph(data_dict, filters, client_info):
     
     # Update axes
     tick_values, tick_labels = get_time_axis_ticks(min_lap_time, max_lap_time)
+    range_extend = (tick_values[-1] - tick_values[0]) * 0.1
     fig.update_yaxes(
         tickvals=tick_values,
         ticktext=tick_labels,
-        #range=[max_lap_time + min_lap_time * 0.01, min_lap_time - min_lap_time * 0.01],
-        range=[tick_values[-1] * 1.001, tick_values[0] * 0.999],
+        range=[tick_values[-1] + range_extend, tick_values[0] - range_extend],
         zeroline=False,
         gridwidth=0.2
     )
