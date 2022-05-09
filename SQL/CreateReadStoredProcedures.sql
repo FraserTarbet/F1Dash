@@ -407,6 +407,25 @@ BEGIN
 		LEFT JOIN Track AS T
 		ON W.SessionTime >= T.SessionTime
 	)
+	,StatusStart AS (
+		SELECT *
+			,CASE 
+				WHEN LAG(SessionId, 1, 0) OVER(ORDER BY WeatherTime ASC) <> SessionId THEN 1
+				WHEN LAG(TrackStatus, 1, NULL) OVER(ORDER BY WeatherTime ASC) <> TrackStatus THEN 1
+				ELSE NULL
+			END AS TrackStatusStart
+
+		FROM TimesJoin
+
+		WHERE RN=1
+	)
+	,StatusSplit AS (
+		SELECT *
+			,COUNT(TrackStatusStart) OVER(ORDER BY WeatherTime ASC) AS TrackStatusId
+
+		FROM StatusStart
+	)
+
 
 	SELECT T.SessionId
 		,T.WeatherTime AS SessionTime
@@ -417,10 +436,11 @@ BEGIN
 		,T.TrackTemp
 		,T.WindDirection
 		,T.WindSpeed
+		,T.TrackStatusId
 		,T.TrackStatus
 		,COUNT(L.SessionTime) AS Laps
 
-	FROM TimesJoin AS T
+	FROM StatusSplit AS T
 
 	LEFT JOIN (
 		-- Get track activity from lap data; base it on rolling count of laps ending
@@ -444,8 +464,6 @@ BEGIN
 	ON T.WeatherTime + @ActivityTimeRange >= L.SessionTime
 	AND T.WeatherTime - @ActivityTimeRange < L.SessionTime
 
-	WHERE RN = 1
-
 	GROUP BY T.SessionId
 		,T.WeatherTime
 		,T.AirTemp
@@ -455,6 +473,7 @@ BEGIN
 		,T.TrackTemp
 		,T.WindDirection
 		,T.WindSpeed
+		,T.TrackStatusId
 		,T.TrackStatus
 
 	ORDER BY T.WeatherTime ASC

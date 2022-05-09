@@ -1034,8 +1034,11 @@ def build_conditions_plot(data_dict, client_info):
     y_values.append(max(y_values) + 1)
     y_labels.append("Track status")
 
-    for status in status_colours:
-        trace_data = data[(data["TrackStatus"] == status)]
+    status_id_list = list(data["TrackStatusId"].unique())
+
+    for status_id in status_id_list:
+        trace_data = data[(data["TrackStatusId"] == status_id)]
+        status = trace_data["TrackStatus"].iloc[0]
         fig.add_trace(
             go.Scatter(
                 x=trace_data["SessionTime"],
