@@ -12,7 +12,9 @@ def get_pyodbc_connection():
         cursor = connection.cursor()
     else:
         # Azure connection string
-        pass
+        connection_string = os.environ["SQLAZURECONNSTR_F1Dash"]
+        connection = pyodbc.connect(connection_string)
+        cursor = connection.cursor()
 
     return {
         "connection": connection,
@@ -31,7 +33,8 @@ def get_sqlalchemy_engine():
         )
     else:
         # Azure connection string
-        pass
+        connection_string = os.environ["CUSTOMCONNSTR_F1DashSqlAlchemy"]
+        engine = sqlalchemy.create_engine(connection_string, fast_executemany=True, pool_pre_ping=True, pool_recycle=3600)
 
     return engine
 
