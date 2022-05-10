@@ -70,7 +70,9 @@ hints_text = [
 conditions_text = [
     html.H5("Session Timeline:"),
     html.Br(),
-    "Click and drag on this chart to filter the dashboard to the selected session time period."
+    "Click and drag on this chart to filter the dashboard to the selected session time period.",
+    html.Br(),
+    "Double click to clear the filter."
 ]
 
 parameters_panel_children = [
