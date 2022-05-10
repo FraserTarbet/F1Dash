@@ -1277,7 +1277,7 @@ BEGIN
 				,T.[Time]
 				,CASE 
 					WHEN T.X = LZ.X AND T.Y = LZ.Y THEN NULL
-					ELSE ABS(DEGREES(ATN2(T.X - LZ.X, T.Y - LZ.Y)) - LZ.HeadingDegrees)
+					ELSE CAST(ABS(DEGREES(ATN2(T.X - LZ.X, T.Y - LZ.Y)) - LZ.HeadingDegrees) AS INT) % 360
 				END AS HeadingDegreesFromBreakHeading
 				,SQRT(POWER(T.X - LZ.X, 2) + POWER(T.Y - LZ.Y, 2)) AS Distance
 
@@ -1301,7 +1301,7 @@ BEGIN
 			SELECT *
 				,CASE
 					WHEN HeadingDegreesFromBreakHeading IS NULL THEN 'After'
-					WHEN HeadingDegreesFromBreakHeading > 90 AND HeadingDegreesFromBreakHeading <= 270 THEN 'Before'
+					WHEN HeadingDegreesFromBreakHeading >= 90 AND HeadingDegreesFromBreakHeading < 270 THEN 'Before'
 					ELSE 'After'
 				END AS BeforeOrAfter
 			FROM Search
@@ -1397,6 +1397,7 @@ BEGIN
 
 		WHERE LZ.SampleBefore IS NULL
 		AND LZ.ZoneNumber = 1
+		AND T.SessionId = @SessionId
 		AND T.[Source] = 'pos'
 	) AS T
 	ON LZ.LapId = T.LapId
@@ -1434,13 +1435,13 @@ BEGIN
 
 		WHERE LZ.SampleAfter IS NULL
 		AND LZ.ZoneNumber = @ZoneCount
+		AND T.SessionId = @SessionId
 		AND T.[Source] = 'pos'
 	) AS T
 	ON LZ.LapId = T.LapId
 	AND LZ.ZoneNumber = T.ZoneNumber
 
 	WHERE T.RN = 1
-
 
 
 	-- Clear existing records for this session
