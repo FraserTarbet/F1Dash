@@ -98,7 +98,3 @@ def read_session_data(event_id, session_name, use_test_data):
     print("Time taken: " + str(datetime.now() - time_start))
 
     return data_dict
-
-
-if __name__ == "__main__":
-    read_session_data(87, "Race", True)

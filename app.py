@@ -91,22 +91,24 @@ config = read_database.get_app_config()
 file_store.size_limit_in_GB = float(config["MaxFileStoreSizeInGB"])
 file_store.delete_files(delete_all=True)
 
-database_thread = threading.Thread(
-    target=database_thread_loop,
-    daemon=True,
-    args=(float(config["DatabaseThreadSleepInHours"]),)
-)
-#database_thread.start()
-
-cache_cleanup_thread = threading.Thread(
-    target=cache_cleanup_thread_loop,
-    daemon=True,
-    args=(
-        float(config["CacheThreadSleepInHours"]),
-        float(config["CacheFileDeleteDelayInHours"])
+if config["EnableDatabaseThread"] == "1":
+    database_thread = threading.Thread(
+        target=database_thread_loop,
+        daemon=True,
+        args=(float(config["DatabaseThreadSleepInHours"]),)
     )
-)
-#cache_cleanup_thread.start()
+    database_thread.start()
+
+if config["EnableCacheCleanupThread"] == "1":
+    cache_cleanup_thread = threading.Thread(
+        target=cache_cleanup_thread_loop,
+        daemon=True,
+        args=(
+            float(config["CacheThreadSleepInHours"]),
+            float(config["CacheFileDeleteDelayInHours"])
+        )
+    )
+    cache_cleanup_thread.start()
 
 dash_app = DashProxy(__name__,
     meta_tags=[

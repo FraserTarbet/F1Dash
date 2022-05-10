@@ -56,7 +56,3 @@ def cleanup(delete_delay_in_hours):
     return deleted_file_count
 
 
-if __name__ == "__main__":
-    cleanup(0.1)
-        
-

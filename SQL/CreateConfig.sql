@@ -14,8 +14,8 @@ INSERT INTO dbo.Config_App(
 )
 VALUES
 ('ForceTestData', '0')
-,('EnableDatabaseThread', '1')
-,('EnableCacheCleanupThread', '1')
+,('EnableDatabaseThread', '0')
+,('EnableCacheCleanupThread', '0')
 ,('OldestDateToLoad', '2022-01-01')
 ,('MaxAbortedLoads', '3')
 ,('HoursToWaitBeforeLoading', '2')
