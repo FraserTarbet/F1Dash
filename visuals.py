@@ -308,12 +308,12 @@ def build_lap_plot(data_dict, filters, client_info):
     # Band by team colours and add X axis labels
     tick_values = []
     tick_labels = []
-    previous_driver_index_end = 0
+    previous_driver_index_end = -0.5
     
     for driver in list(data["Driver"].unique()):
         #index_min = data.index[(data["Driver"] == driver)].min()
         x_min = previous_driver_index_end
-        x_max = data.index[(data["Driver"] == driver)].max()
+        x_max = data.index[(data["Driver"] == driver)].max() + 0.5
         x_mid = int(x_min + (x_max - x_min) / 2)
         previous_driver_index_end = x_max
         tick_values.append(x_mid)
