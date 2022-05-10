@@ -162,8 +162,10 @@ def get_time_axis_ticks(time_min, time_max):
 
     tick_spacings = [
         one_second * 0.01,
+        one_second * 0.02,
         one_second * 0.05,
         one_second * 0.1,
+        one_second * 0.2,
         one_second * 0.5,
         one_second,
         one_second * 2,
