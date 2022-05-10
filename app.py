@@ -448,6 +448,7 @@ def driver_filter_values_refresh(team_filter_values, datasets, driver_filter_val
         return []
     else:
         session_drivers = datasets["session_drivers"]
+        driver_filter_values = [] if driver_filter_values is None else driver_filter_values
         valid_drivers = list(session_drivers[(session_drivers["TeamName"].isin(driver_filter_values))]["RacingNumber"])
         return [driver for driver in driver_filter_values if driver in valid_drivers]
 

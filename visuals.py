@@ -473,7 +473,7 @@ def build_track_map(data_dict, filters, client_info):
         track = track_map[(track_map[section_identifier]) == section].copy()
         track.sort_values("SampleId", inplace=True)
 
-        driver_bests = section_times[(section_times[section_identifier] == section)].groupby(["Tla", "TeamColour"])[time_identifier].min().reset_index()
+        driver_bests = section_times[(section_times[section_identifier] == section)].groupby(["Tla", "TeamColour", "DriverOrder"])[time_identifier].min().reset_index()
         driver_bests.sort_values(time_identifier, inplace=True)
         driver_bests.reset_index(drop=True, inplace=True)
 
@@ -543,11 +543,27 @@ def build_track_map(data_dict, filters, client_info):
                     hovertext=hover_text,
                     marker_color=colour,
                     opacity=opacity,
-                    line_width=5,
+                    line_width=6,
                     line_shape="spline",
                     customdata=[{section_identifier: section}] * len(track)
                 )
             )
+
+            # If number 2 driver, overlay narrow yellow line
+            if driver_bests["DriverOrder"].iloc[0] == 2:
+                fig.add_trace(
+                    go.Scatter(
+                        x=track["X"],
+                        y=track["Y"],
+                        mode="lines",
+                        marker_color="#FFFF00",
+                        hoverinfo="none",
+                        opacity=opacity,
+                        line_width=1,
+                        line_shape="spline",
+                        customdata=[{section_identifier: section}] * len(track)
+                    )
+                )
 
     if len(filter_values(filters, "LapId")) == 1:
         lap_number = section_times[(section_times["LapId"] == lap_id)]["NumberOfLaps"].iloc[0]
