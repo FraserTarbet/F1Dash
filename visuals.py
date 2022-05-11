@@ -487,36 +487,54 @@ def build_track_map(data_dict, filters, client_info):
 
             lap_id = lap_id_filter[0]
 
-            tla = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)]["Tla"].iloc[0]
-            section_time = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)][time_identifier].iloc[0]
-            personal_best = driver_bests[(driver_bests["Tla"] == tla)][time_identifier].iloc[0]
-            session_best = driver_bests[time_identifier].min()
-
-            if section_time == session_best:
-                colour = colours["session_best"]
-                hover_text = "Session best: " + ns_to_delta_string(section_time, True)
-            elif section_time == personal_best:
-                colour = colours["personal_best"]
-                hover_text = f"Personal best, {ns_to_delta_string(section_time - session_best)} to session best"
-            else:
-                colour = colours["no_improvement"]
-                hover_text = f"No improvement, {ns_to_delta_string(section_time - personal_best)} to personal best,<br>{ns_to_delta_string(section_time - session_best)} to session best"
-
-            fig.add_trace(
-                go.Scatter(
-                    x=track["X"],
-                    y=track["Y"],
-                    mode="lines+markers",
-                    marker_size=0.5,
-                    hoverinfo="text",
-                    hovertext=hover_text,
-                    marker_color=colour,
-                    opacity=opacity,
-                    line_width=5,
-                    line_shape="spline",
-                    customdata=[{section_identifier: section}] * len(track)
+            if len(section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)]) == 0:
+                # Handle missing/erroneous data
+                fig.add_trace(
+                    go.Scatter(
+                        x=track["X"],
+                        y=track["Y"],
+                        mode="lines+markers",
+                        marker_size=0.5,
+                        hoverinfo="text",
+                        hovertext="Missing/erroneous data",
+                        marker_color="#15151E",
+                        opacity=1,
+                        line_width=1,
+                        line_shape="spline",
+                        customdata=[{section_identifier: section}] * len(track)
+                    )
                 )
-            )
+            else:
+                tla = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)]["Tla"].iloc[0]
+                section_time = section_times[(section_times["LapId"] == lap_id) & (section_times[section_identifier] == section)][time_identifier].iloc[0]
+                personal_best = driver_bests[(driver_bests["Tla"] == tla)][time_identifier].iloc[0]
+                session_best = driver_bests[time_identifier].min()
+
+                if section_time == session_best:
+                    colour = colours["session_best"]
+                    hover_text = "Session best: " + ns_to_delta_string(section_time, True)
+                elif section_time == personal_best:
+                    colour = colours["personal_best"]
+                    hover_text = f"Personal best, {ns_to_delta_string(section_time - session_best)} to session best"
+                else:
+                    colour = colours["no_improvement"]
+                    hover_text = f"No improvement, {ns_to_delta_string(section_time - personal_best)} to personal best,<br>{ns_to_delta_string(section_time - session_best)} to session best"
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=track["X"],
+                        y=track["Y"],
+                        mode="lines+markers",
+                        marker_size=0.5,
+                        hoverinfo="text",
+                        hovertext=hover_text,
+                        marker_color=colour,
+                        opacity=opacity,
+                        line_width=5,
+                        line_shape="spline",
+                        customdata=[{section_identifier: section}] * len(track)
+                    )
+                )
 
         else:
             # Show best driver per section
