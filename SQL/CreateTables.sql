@@ -285,6 +285,7 @@ CREATE TABLE dbo.Zone(
 	,ZoneNumber INT
 	,ZoneTime FLOAT
 	,ZoneSessionTime FLOAT
+	,SenseCheck BIT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE CLUSTERED INDEX IndexLapIdZoneNumber ON dbo.Zone (LapId, ZoneNumber)

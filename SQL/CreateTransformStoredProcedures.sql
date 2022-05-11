@@ -1487,3 +1487,85 @@ BEGIN
 	DROP TABLE #ZoneBreaks, #LapZones
 
 END
+
+
+DROP PROCEDURE IF EXISTS dbo.Update_ZoneSenseCheck
+GO
+CREATE PROCEDURE dbo.Update_ZoneSenseCheck @SessionId INT
+AS
+BEGIN
+
+	/* 
+		Update Zone table SenseCheck field.
+		Sense check zone times by comparing to each driver's clean lap times on that compound.
+		Use Z-scoring i.e. number of standard deviations from the mean.
+		Positive scores could just mean the driver made a mistake on that lap.
+		Look for largely negative scores, since these are much more likely to be a data issue than a driver suddenly doing one phenomenal lap.
+		When such a score is found with a positive outlier adjacent, mark both as suspect. Probably a problem with the samples at the zone break point.
+	*/
+
+	DECLARE @NegativeZScoreThreshold FLOAT = -3.0
+		,@PositiveZScoreThreshold FLOAT = 2.0
+
+
+	;WITH Scoring AS (
+		SELECT L.LapId
+			,L.Driver
+			,L.NumberOfLaps
+			,L.CleanLap
+			,L.Compound
+			,Z.ZoneNumber
+			,Z.ZoneTime
+			,PERCENTILE_CONT(0.5)
+				WITHIN GROUP(ORDER BY ZoneTime ASC)
+				OVER(PARTITION BY L.Compound, Z.ZoneNumber)
+			AS MedianZoneTime
+			,(Z.ZoneTime - AVG(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber)) / STDEVP(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber) AS ZScore
+
+		FROM dbo.Zone AS Z
+
+		INNER JOIN dbo.MergedLapData AS L
+		ON Z.LapId = L.LapId
+
+		WHERE L.SessionId = @SessionId
+		AND L.CleanLap = 1
+	)
+	,Adjacents AS (
+		SELECT *
+			,LAG(ZScore, 1, 0) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) AS PreviousZScore
+			,LEAD(ZScore, 1, 0) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) AS NextZScore
+
+		FROM Scoring
+	)
+	,SenseCheck AS (
+		SELECT *
+			,CASE
+				WHEN ZoneTime IS NULL THEN 0
+				WHEN LAG(NumberOfLaps, 1, 0) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) < NumberOfLaps - 1 THEN 1
+				WHEN LEAD(NumberOfLaps, 1, 999) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) > NumberOfLaps + 1 THEN 1
+				WHEN ZScore < @NegativeZScoreThreshold AND (PreviousZScore > @PositiveZScoreThreshold OR NextZScore > @PositiveZScoreThreshold) THEN 0
+				WHEN ZScore > @PositiveZScoreThreshold AND (PreviousZScore < @NegativeZScoreThreshold OR NextZScore < @NegativeZScoreThreshold) THEN 0
+				ELSE 1
+			END AS SenseCheck
+
+		FROM Adjacents
+
+	)
+
+	UPDATE Z
+
+	SET Z.SenseCheck = C.SenseCheck
+
+	FROM dbo.Zone AS Z
+
+	INNER JOIN dbo.MergedLapData AS L
+	ON Z.LapId = L.LapId
+
+	LEFT JOIN SenseCheck AS C
+	ON Z.LapId = C.LapId
+	AND Z.ZoneNumber = C.ZoneNumber
+
+	WHERE L.SessionId = @SessionId
+
+
+END
