@@ -5,3 +5,4 @@ fastf1_http_cache.sqlite
 /ffcache
 file_system_store/*
 !file_system_store/dummy.txt
+test.py

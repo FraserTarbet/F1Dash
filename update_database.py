@@ -1,7 +1,9 @@
 import fastf1 as ff
 import pandas as pd
+from sqlalchemy.exc import OperationalError
 import datetime
 import os
+import time
 import sql_connection
 
 
@@ -157,6 +159,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         if abort:
             # Update aborted load count and add to log, continue to next loop iteration
             cursor.execute("EXEC dbo.Update_IncrementAbortedLoadCount @SessionId=?", int(session["SessionId"]))
+            cursor.commit()
             data_logging(pyodbc_connection, f"Data load aborted: {session['api_string']}")
             continue
 
@@ -265,6 +268,9 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
             # Load /reload data
             cursor.execute("EXEC dbo.Delete_Telemetry @SessionId=?", int(session["SessionId"]))
             cursor.commit()
+
+            # Break up large datasets into 100k row chunks - Azure SQL returns intermittent errors when maxed out
+            # Retry max three times on any load before giving up
             for dataset in [
                 (laps, "Lap"),
                 (sectors, "Sector"),
@@ -278,15 +284,50 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
                 (weather_data, "WeatherData")
             ]:
                 data_logging(pyodbc_connection, f"Loading {len(dataset[0])} records to {dataset[1]}")
-                dataset[0].to_sql(dataset[1], sqlalchemy_engine, if_exists="append", index=False)
+                chunk_ranges = []
+                chunk_size = 100000
+                abort = False
+                for i in range(0, int(len(dataset[0]) / chunk_size) + 1):
+                    chunk_ranges.append(
+                        (
+                            i * chunk_size,
+                            min((i + 1) * chunk_size, len(dataset[0]))
+                        )
+                    )
 
-            cursor.execute("EXEC dbo.Update_SetNullTimes @SessionId=?", int(session["SessionId"]))
-            cursor.execute("EXEC dbo.Update_SetDriverTeamOrders @SessionId=?", int(session["SessionId"]))
-            cursor.execute("EXEC dbo.Insert_MissingSectors @SessionId=?", int(session["SessionId"]))
+                for chunk_range in chunk_ranges:
+                    success = False
+                    error_count = 0
+                    if len(chunk_ranges) > 1:
+                        data_logging(pyodbc_connection, f"Loading chunk {str(chunk_range[0])}:{str(chunk_range[1])} to {dataset[1]}")
+                    while not success and error_count < 3:
+                        try:
+                            dataset[0].iloc[chunk_range[0]:chunk_range[1]].to_sql(dataset[1], sqlalchemy_engine, if_exists="append", index=False)
+                        except OperationalError:
+                            error_count += 1
+                            data_logging(pyodbc_connection, f"Operational error loading chunk; attempt {str(error_count)}")
+                            time.sleep(5)
+                        else:
+                            success = True
+                            time.sleep(5)
 
-            cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 0)
-            cursor.commit()
-            data_logging(pyodbc_connection, f"Data load at least partially complete for SessionId {session['SessionId']}")
+                    if not success:
+                        abort = True
+
+                if abort:
+                    cursor.execute("EXEC dbo.Update_IncrementAbortedLoadCount @SessionId=?", int(session["SessionId"]))
+                    cursor.commit()
+                    data_logging(pyodbc_connection, f"Data load aborted: {session['api_string']}")
+                    break
+
+            if not abort:
+                cursor.execute("EXEC dbo.Update_SetNullTimes @SessionId=?", int(session["SessionId"]))
+                cursor.execute("EXEC dbo.Update_SetDriverTeamOrders @SessionId=?", int(session["SessionId"]))
+                cursor.execute("EXEC dbo.Insert_MissingSectors @SessionId=?", int(session["SessionId"]))
+
+                cursor.execute("EXEC dbo.Update_SessionLoadStatus @SessionId=?, @Status=?", int(session["SessionId"]), 0)
+                cursor.commit()
+                data_logging(pyodbc_connection, f"Data load at least partially complete for SessionId {session['SessionId']}")
 
 
 def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None):
