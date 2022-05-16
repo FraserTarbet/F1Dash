@@ -1520,7 +1520,10 @@ BEGIN
 				WITHIN GROUP(ORDER BY ZoneTime ASC)
 				OVER(PARTITION BY L.Compound, Z.ZoneNumber)
 			AS MedianZoneTime
-			,(Z.ZoneTime - AVG(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber)) / STDEVP(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber) AS ZScore
+			,CASE
+				WHEN STDEVP(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber) = 0 THEN NULL
+				ELSE (Z.ZoneTime - AVG(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber)) / STDEVP(ZoneTime) OVER(PARTITION BY L.Driver, L.Compound, Z.ZoneNumber) 
+			END AS ZScore
 
 		FROM dbo.Zone AS Z
 

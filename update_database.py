@@ -378,6 +378,9 @@ def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, for
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Zone @SessionId=?", int(sessionId))
         data_logging(pyodbc_connection, f"Ran Merge_Zone for SessionId {sessionId}")
 
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_ZoneSenseCheck @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Update_ZoneSenseCheck for SessionId {sessionId}")
+
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
         data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
 
