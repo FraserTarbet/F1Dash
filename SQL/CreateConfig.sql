@@ -14,6 +14,7 @@ INSERT INTO dbo.Config_App(
 )
 VALUES
 ('ForceTestData', '0')
+,('RunLightVersion', '0')
 ,('EnableDatabaseThread', '0')
 ,('EnableCacheCleanupThread', '0')
 ,('OldestDateToLoad', '2022-01-01')

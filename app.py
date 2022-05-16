@@ -90,6 +90,9 @@ config = read_database.get_app_config()
 
 file_store.size_limit_in_GB = float(config["MaxFileStoreSizeInGB"])
 file_store.delete_files(delete_all=True)
+light_version = config['RunLightVersion'] == "1"
+layouts.light_version = light_version
+read_database.light_version = light_version
 
 if config["EnableDatabaseThread"] == "1":
     database_thread = threading.Thread(
@@ -166,9 +169,15 @@ def initiate(client_info):
     # Use this callback to customise layouts within container based on desktop/mobile device
 
     if client_info["isMobile"]:
-        layout = layouts.layout_mobile
+        if light_version:
+            pass
+        else:
+            layout = layouts.layout_mobile
     else:
-        layout = layouts.layout_desktop
+        if light_version:
+            layout = layouts.layout_desktop_light
+        else:
+            layout = layouts.layout_desktop
 
     read_database.app_logging(str(client_info), "initiate", "mobile" if client_info["isMobile"] else "desktop")
 
@@ -662,7 +671,13 @@ def inputs_graph_refresh(
     datasets,
     client_info
 ):
-    if datasets is None:
+    if light_version:
+        return (
+            no_update,
+            no_update,
+            no_update
+        )
+    elif datasets is None:
         figure, data_displayed = visuals.build_inputs_graph(datasets, [], client_info)
         return (
             figure,
@@ -716,4 +731,4 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
         
 if __name__ == "__main__":
     # Azure host will not run this
-    dash_app.run_server(debug=False)
+    dash_app.run_server(debug=True)

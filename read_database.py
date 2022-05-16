@@ -4,6 +4,7 @@ import os
 import threading
 from datetime import datetime
 
+light_version = None
 
 def get_app_config():
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
@@ -64,6 +65,7 @@ def read_session_data(event_id, session_name, use_test_data):
         "conditions_data": "ConditionsData",
         "session_drivers": "SessionDrivers"
     }
+    if light_version: sp_dict.pop("car_data")
     data_dict_list = []
     threads = []
     for key in sp_dict:
