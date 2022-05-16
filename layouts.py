@@ -458,7 +458,8 @@ layout_mobile = [
                                                 {"label": "Brake", "value": "Brake"}
                                             ], 
                                             value=["RPM", "Speed", "Gear", "Throttle", "Brake"], 
-                                            inline=False
+                                            inline=False,
+                                            style={"font-size": "0.8rem"}
                                         )
                                     ]
                                 ),
@@ -608,4 +609,104 @@ layout_desktop_light = [
             )
         ]
     )
+]
+
+
+layout_mobile_light = [
+    dbc.Offcanvas(
+        id="parameters_panel",
+        is_open=True,
+        backdrop="static",
+        close_button=False,
+        scrollable=True,
+        children=parameters_panel_children,
+        style={"max-width": "80vw", "font-size": "0.75rem"}
+    ),
+    html.Div(
+        id="dashboard_div",
+        hidden=True,
+        children=[
+            html.Div(
+                id="visuals_div",
+                children=[
+                    html.Div(
+                        id="headings_div",
+                        children=[
+                            html.Div(id="upper_heading", hidden=True),
+                            dbc.Row(dbc.Col(html.H1(id="lower_heading"), xs=12)),
+                            html.Hr(),
+                            dbc.Row(
+                                [
+                                    dbc.Col(dbc.Button(id="open_parameters_button", children="Open Filters", size="sm"), xs=4),
+                                    dbc.Col(html.P(short_abstract_text, style={"font-size": "0.75rem"}), xs=8)
+                                ]
+                            )
+                        ]
+                    ),
+                    dbc.Row(
+                        dbc.Col(
+                            [
+                                dcc.Graph(id="lap_plot", config={"displayModeBar": False}, style={"height": heights_dict["mobile"]["lap_plot"]}),
+                                html.Div(dcc.Loading(id="lap_plot_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                            ],
+                            xs=12
+                        )                      
+                    ),
+                    dbc.Row(
+                        dbc.Col(
+                            [
+                                dcc.Graph(id="stint_graph", config={"displayModeBar": False}, style={"height": heights_dict["mobile"]["stint_graph"]}),
+                                html.Div(dcc.Loading(id="stint_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                            ],
+                            xs=12
+                        )
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    dcc.Graph(
+                                        id="track_map", 
+                                        config={"displayModeBar": False}, 
+                                        style={
+                                            "height": heights_dict["mobile"]["track_map"], 
+                                            "width": heights_dict["mobile"]["track_map"]
+                                        },
+                                        clear_on_unhover=True
+                                    ),
+                                    html.Div(dcc.Loading(id="track_map_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
+                                ],
+                                xs=7
+                            ),
+                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.60rem"}), align="start", xs=5)
+                        ],
+                        justify="start"
+                    ),
+                    html.Div(
+                        hidden=True,
+                        children=[
+                            dcc.Graph(id="inputs_graph"), 
+                            html.Div(id="input_trace_selector_div"), 
+                            dbc.Checklist(id="input_trace_selector"),
+                            dcc.Loading(id="inputs_graph_loading")
+                        ]
+                    )
+                ]
+            ),
+            html.Div(
+                hidden=True,
+                children=[
+                    dbc.Button(id="open_conditions_button"),
+                    dbc.Offcanvas(
+                        id="conditions_panel",
+                        is_open=False,
+                        children=[
+                            dcc.Graph(id="conditions_plot")
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
 ]

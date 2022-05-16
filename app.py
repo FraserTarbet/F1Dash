@@ -170,7 +170,7 @@ def initiate(client_info):
 
     if client_info["isMobile"]:
         if light_version:
-            pass
+            layout = layouts.layout_mobile_light
         else:
             layout = layouts.layout_mobile
     else:
