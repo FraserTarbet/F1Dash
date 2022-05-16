@@ -539,9 +539,8 @@ layout_desktop_light = [
                                     dcc.Graph(id="stint_graph", config={"displayModeBar": False}, style={"height": heights_dict["desktop"]["visuals_lower"]}),
                                     html.Div(dcc.Loading(id="stint_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
                                 ],
-                                xs=8
+                                xs=6
                             ),
-
                             dbc.Col(
                                 [
                                     dcc.Graph(
@@ -558,7 +557,7 @@ layout_desktop_light = [
                                 xs=2
                             ),
                             dbc.Col(
-                                html.Div(id="track_map_readout", style={"font-size": "0.70rem", "margin-left": "30px"}), 
+                                html.Div(id="track_map_readout", style={"font-size": "0.7rem", "margin-left": "20px"}), 
                                 align="start", 
                                 xs=2
                             )
@@ -572,6 +571,7 @@ layout_desktop_light = [
                                 ]
                             )
                         ],
+                        justify="between"
                     ),
                 ]
             ),

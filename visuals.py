@@ -444,7 +444,7 @@ def build_track_map(data_dict, filters, client_info):
                 )
         ]
         readout.extend(readout_delta)
-        readout = html.Table(readout, style={"color": "#FFFFFF", "background-color": "#555", "margin-top": "50px", "margin-left": "50px", "width": "150px", "font-size": "0.75rem"})
+        readout = html.Table(readout, style={"color": "#FFFFFF", "background-color": "#555", "margin-top": "50px", "margin-left": "10px", "width": "150px", "font-size": "0.7rem"})
         
     else:
         readout_frame = filter_data(readout_data, filters).groupby(["Tla", "LapId", "TeamColour"])[readout_time_identifier].sum().reset_index()
@@ -463,11 +463,11 @@ def build_track_map(data_dict, filters, client_info):
                             html.Td(tla_time['Tla'], style={"color": "#FFFFFF"}),
                             html.Td(ns_to_delta_string(time_delta, i == 0), style={"color": "#FFFFFF", "background-color": "#555", "width": "80px"})
                         ],
-                        style={"line-height": "1.5vh"}
+                        style={"line-height": "1.4vh"}
                     )
                 ]
             )
-        readout = html.Table(readout, style={"background-color": "#15151E", "margin-top": "1.5vh", "margin-left": "50px"})
+        readout = html.Table(readout, style={"background-color": "#15151E", "margin-top": "1.5vh", "margin-left": "10px"})
 
     # Draw map
     for section in sections:
