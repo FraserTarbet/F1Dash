@@ -370,13 +370,14 @@ def build_track_map(data_dict, filters, client_info):
         fig = empty_figure(fig)
         return fig, ""
 
-    x_min = 0
-    x_max = 0
-    y_min = 0
-    y_max = 0
-
-
+    
     track_map = data_dict["track_map"]
+
+    x_min = track_map["X"].min()
+    x_max = track_map["X"].max()
+    y_min = track_map["Y"].min()
+    y_max = track_map["Y"].max()
+
 
     if filter_values(filters, "track_split")[0] == "zones":
         section_times = data_dict["zone_times"]
@@ -472,6 +473,7 @@ def build_track_map(data_dict, filters, client_info):
     for section in sections:
         track = track_map[(track_map[section_identifier]) == section].copy()
         track.sort_values("SampleId", inplace=True)
+        track.reset_index(drop=True, inplace=True)
 
         driver_bests = section_times[(section_times[section_identifier] == section)].groupby(["Tla", "TeamColour", "DriverOrder"])[time_identifier].min().reset_index()
         driver_bests.sort_values(time_identifier, inplace=True)
@@ -583,6 +585,25 @@ def build_track_map(data_dict, filters, client_info):
                     )
                 )
 
+            # Add TLA annotations (mobile only)
+            if client_info["isMobile"]:
+                mid_index = int(len(track) / 2)
+                mid_x = track["X"].iloc[mid_index]
+                mid_y = track["Y"].iloc[mid_index]
+ 
+                fig.add_annotation(
+                    x=mid_x,
+                    y=mid_y,
+                    text=driver_bests["Tla"].iloc[0],
+                    showarrow=False,
+                    font={"color": "#" + driver_bests["TeamColour"].iloc[0]},
+                    bgcolor="#dee2e6",
+                    borderpad=0,
+                    opacity=0.75,
+                    height=10
+                )
+
+
     if len(filter_values(filters, "LapId")) == 1:
         lap_number = section_times[(section_times["LapId"] == lap_id)]["NumberOfLaps"].iloc[0]
         title_main = f"<b>{title_section} Times</b>, {tla} Lap {lap_number}"
@@ -601,11 +622,6 @@ def build_track_map(data_dict, filters, client_info):
     fig.update_layout(
         title_text=title_main + subtitle
     )
-
-    x_min = track_map["X"].min()
-    x_max = track_map["X"].max()
-    y_min = track_map["Y"].min()
-    y_max = track_map["Y"].max()
 
     # Extend X & Y axes a bit to fit whole map, also hide them
     x_centre = (x_min + x_max) / 2
