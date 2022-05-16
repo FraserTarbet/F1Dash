@@ -299,7 +299,7 @@ def build_lap_plot(data_dict, filters, client_info):
             marker_color=data["colour"],
             marker_line_color=data["line_colour"],
             marker_line_width=1,
-            hoverinfo="text",
+            hoverinfo="none" if client_info["isMobile"] else "text",
             hovertext=data["text"],
             customdata=data[["StintId", "LapId"]].to_dict("records")
         )
@@ -497,7 +497,7 @@ def build_track_map(data_dict, filters, client_info):
                         y=track["Y"],
                         mode="lines+markers",
                         marker_size=0.5,
-                        hoverinfo="text",
+                        hoverinfo="none" if client_info["isMobile"] else "text",
                         hovertext="Missing/erroneous data",
                         marker_color="#15151E",
                         opacity=1,
@@ -528,7 +528,7 @@ def build_track_map(data_dict, filters, client_info):
                         y=track["Y"],
                         mode="lines+markers",
                         marker_size=0.5,
-                        hoverinfo="text",
+                        hoverinfo="none" if client_info["isMobile"] else "text",
                         hovertext=hover_text,
                         marker_color=colour,
                         opacity=opacity,
@@ -559,7 +559,7 @@ def build_track_map(data_dict, filters, client_info):
                     y=track["Y"],
                     mode="lines+markers",
                     marker_size=0.5,
-                    hoverinfo="text",
+                    hoverinfo="none" if client_info["isMobile"] else "text",
                     hovertext=hover_text,
                     marker_color=colour,
                     opacity=opacity,
@@ -752,7 +752,7 @@ def build_stint_graph(data_dict, filters, client_info):
                 mode="lines+markers",
                 marker_color=colour,
                 marker_size = 4,
-                hoverinfo="text",
+                hoverinfo="none" if client_info["isMobile"] else "text",
                 hovertext=trace_data["Tla"] + ": " + trace_data["text"],
                 line={"dash": dash_style},
                 name=trace_name
@@ -775,7 +775,7 @@ def build_stint_graph(data_dict, filters, client_info):
                         marker_color=colour,
                         marker_line_width=1,
                         marker_line_color="rgb(255, 255, 255)",
-                        hoverinfo="text",
+                        hoverinfo="none" if client_info["isMobile"] else "text",
                         hovertext=trace_data["Tla"] + ": " + trace_data["text"],
                         showlegend=False
                     )
@@ -894,7 +894,7 @@ def build_inputs_graph(data_dict, filters, client_info):
                     mode="lines+markers",
                     marker_color=traces_colours[trace],
                     marker_size=0.5,
-                    hoverinfo="text",
+                    hoverinfo="none" if client_info["isMobile"] else "text",
                     hovertext=lap_data["text_" + trace],
                     line={"dash": dash_style},
                     legendgroup=legend_group,
