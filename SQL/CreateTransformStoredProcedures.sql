@@ -1487,6 +1487,7 @@ BEGIN
 	DROP TABLE #ZoneBreaks, #LapZones
 
 END
+GO
 
 
 DROP PROCEDURE IF EXISTS dbo.Update_ZoneSenseCheck
@@ -1572,3 +1573,4 @@ BEGIN
 
 
 END
+GO
