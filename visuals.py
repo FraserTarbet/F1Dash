@@ -803,14 +803,14 @@ def build_stint_graph(data_dict, filters, client_info):
     return fig
 
 
-def build_inputs_graph(data_dict, filters, client_info):
+def build_inputs_graph(data_dict, filters, client_info, data):
 
     # Car inputs over time for a maximum of two laps
     # Returns an extra boolean to indicate whether any data is being displayed
 
     fig = get_figure(client_info)
 
-    if data_dict is None:
+    if data is None:
         fig = empty_figure(fig)
         return fig, False
 
@@ -823,14 +823,16 @@ def build_inputs_graph(data_dict, filters, client_info):
         fig = empty_figure(fig, "Filter to one/two laps to view driver input telemetry")
         return fig, False
 
-    data = data_dict["car_data"].copy()
-
+    norms_data = data_dict["car_data_norms"]
     norms = {
-        "RPM": (data["RPM"].min(), data["RPM"].max()),
-        "Speed": (data["Speed"].min(), data["Speed"].max()),
-        "Throttle": (data["Throttle"].min(), data["Throttle"].max()),
-        "Gear": (data["Gear"].min(), data["Gear"].max())
+        "RPM": (norms_data["RPMMin"], norms_data["RPMMax"]),
+        "Speed": (norms_data["SpeedMin"], norms_data["SpeedMax"]),
+        "Throttle": (norms_data["ThrottleMin"], norms_data["ThrottleMax"]),
+        "Gear": (norms_data["GearMin"], norms_data["GearMax"])
     }
+
+    if not isinstance(data, pd.DataFrame):
+        data = pd.DataFrame(data)
 
     data = filter_data(data, filters)
 

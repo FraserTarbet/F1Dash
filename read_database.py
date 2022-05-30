@@ -57,15 +57,17 @@ def read_session_data(event_id, session_name, use_test_data):
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
 
     sp_dict = {
-        "car_data": "CarData",
         "track_map": "TrackMap",
         "lap_times": "LapTimes",
         "sector_times": "SectorTimes",
         "zone_times": "ZoneTimes",
         "conditions_data": "ConditionsData",
-        "session_drivers": "SessionDrivers"
+        "session_drivers": "SessionDrivers",
+        "car_data_norms": "CarDataNorms"
     }
-    if light_version: sp_dict.pop("car_data")
+
+    if light_version: sp_dict.pop("car_data_norms")
+
     data_dict_list = []
     threads = []
     for key in sp_dict:
@@ -100,3 +102,21 @@ def read_session_data(event_id, session_name, use_test_data):
     print("Time taken: " + str(datetime.now() - time_start))
 
     return data_dict
+
+
+def read_car_data(event_id, session_name, lap_ids):
+    
+    sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
+
+    sql = f"EXEC dbo.Read_CarData @EventId={event_id}, @SessionName='{session_name}', @LapIdA={lap_ids[0]}"
+
+    if len(lap_ids) == 2:
+        sql += f", @LapIdB={lap_ids[1]};"
+    else:
+        sql += ", @LapIdB=NULL;"
+
+    data = pd.read_sql_query("SET NOCOUNT ON; " + sql, sqlalchemy_engine)
+
+    sqlalchemy_engine.dispose()
+
+    return data
