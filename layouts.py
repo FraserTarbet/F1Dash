@@ -441,32 +441,34 @@ layout_mobile = [
                                     dcc.Graph(id="inputs_graph", config={"displayModeBar": False}, style={"height": heights_dict["mobile"]["inputs_graph"]}),
                                     html.Div(dcc.Loading(id="inputs_graph_loading", type="circle", color="#FF1E00", style={"margin-top": "-30vh"}), style={"height": "0px"})
                                 ], 
-                                xs=10
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    id="input_trace_selector_div",
-                                    hidden=True,
-                                    children=[
-                                        dbc.Checklist(
-                                            id="input_trace_selector", 
-                                            options=[
-                                                {"label": "RPM", "value": "RPM"},
-                                                {"label": "Speed", "value": "Speed"},
-                                                {"label": "Gear", "value": "Gear"},
-                                                {"label": "Throttle", "value": "Throttle"},
-                                                {"label": "Brake", "value": "Brake"}
-                                            ], 
-                                            value=["RPM", "Speed", "Gear", "Throttle", "Brake"], 
-                                            inline=False,
-                                            style={"font-size": "0.8rem"}
-                                        )
-                                    ]
-                                ),
-                                xs=2,
-                                align="center"
+                                xs=12
                             )
                         ]
+                    ),
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(
+                                id="input_trace_selector_div",
+                                hidden=True,
+                                children=[
+                                    dbc.Checklist(
+                                        id="input_trace_selector", 
+                                        options=[
+                                            {"label": "RPM", "value": "RPM"},
+                                            {"label": "Speed", "value": "Speed"},
+                                            {"label": "Gear", "value": "Gear"},
+                                            {"label": "Throttle", "value": "Throttle"},
+                                            {"label": "Brake", "value": "Brake"}
+                                        ], 
+                                        value=["RPM", "Speed", "Gear", "Throttle", "Brake"], 
+                                        inline=True,
+                                        style={"font-size": "0.8rem"}
+                                    )
+                                ]
+                            ),
+                            xs=12,
+                            align="center"
+                        )
                     )
                 ]
             ),
