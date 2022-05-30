@@ -828,7 +828,7 @@ def build_inputs_graph(data_dict, filters, client_info, data):
         "RPM": (norms_data["RPMMin"], norms_data["RPMMax"]),
         "Speed": (norms_data["SpeedMin"], norms_data["SpeedMax"]),
         "Throttle": (norms_data["ThrottleMin"], norms_data["ThrottleMax"]),
-        "Gear": (norms_data["GearMin"], norms_data["GearMax"])
+        "Gear": (0, 8)
     }
 
     if not isinstance(data, pd.DataFrame):
