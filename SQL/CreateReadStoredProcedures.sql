@@ -61,7 +61,7 @@ GO
 
 DROP PROCEDURE IF EXISTS dbo.Read_CarData
 GO
-CREATE PROCEDURE dbo.Read_CarData @EventId INT, @SessionName VARCHAR(MAX)
+CREATE PROCEDURE dbo.Read_CarData @EventId INT, @SessionName VARCHAR(MAX), @LapIdA INT, @LapIdB INT
 AS
 BEGIN
 
@@ -116,6 +116,11 @@ BEGIN
 		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 	)
 	AND T.[Source] = 'car'
+	AND (
+		T.LapId = @LapIdA
+		OR T.LapId = @LapIdB
+	)
+	AND T.LapId IS NOT NULL
 
 END
 GO
