@@ -117,10 +117,10 @@ BEGIN
 	)
 	AND T.[Source] = 'car'
 	AND (
-		T.LapId = @LapIdA
-		OR T.LapId = @LapIdB
+		L.LapId = @LapIdA
+		OR L.LapId = @LapIdB
 	)
-	AND T.LapId IS NOT NULL
+	AND L.LapId IS NOT NULL
 
 END
 GO

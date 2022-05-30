@@ -1582,6 +1582,10 @@ CREATE PROCEDURE dbo.Merge_CarDataNorms @SessionId INT
 AS
 BEGIN
 
+	DELETE
+	FROM dbo.CarDataNorms
+	WHERE SessionId = @SessionId
+
 	INSERT INTO dbo.CarDataNorms(
 		SessionId
 		,RPMMin
@@ -1603,17 +1607,11 @@ BEGIN
 		,MIN(T.Throttle) AS ThrottleMin
 		,MAX(T.Throttle) AS ThrottleMax
 
-	FROM dbo.Session AS S
+	FROM dbo.MergedTelemetry AS T
 
-	INNER JOIN dbo.MergedLapData AS L
-	ON S.id = L.SessionId
-
-	INNER JOIN dbo.MergedTelemetry AS T
-	ON L.LapId = T.LapId
-
-	WHERE S.id = @SessionId
+	WHERE T.SessionId = @SessionId
 	AND T.[Source] = 'car'
-	AND L.LapId IS NOT NULL
+	AND T.LapId IS NOT NULL
 
 END
 GO
