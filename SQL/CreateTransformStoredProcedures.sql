@@ -1574,3 +1574,46 @@ BEGIN
 
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Merge_CarDataNorms
+GO
+CREATE PROCEDURE dbo.Merge_CarDataNorms @SessionId INT
+AS
+BEGIN
+
+	INSERT INTO dbo.CarDataNorms(
+		SessionId
+		,RPMMin
+		,RPMMax
+		,SpeedMin
+		,SpeedMax
+		,GearMin
+		,GearMax
+		,ThrottleMin
+		,ThrottleMax
+	)
+	SELECT @SessionId
+		,MIN(T.RPM) AS RPMMin
+		,MAX(T.RPM) AS RPMMax
+		,MIN(T.Speed) AS SpeedMin
+		,MAX(T.Speed) AS SpeedMax
+		,MIN(T.Gear) AS GearMin
+		,MAX(T.Gear) AS GearMax
+		,MIN(T.Throttle) AS ThrottleMin
+		,MAX(T.Throttle) AS ThrottleMax
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.MergedLapData AS L
+	ON S.id = L.SessionId
+
+	INNER JOIN dbo.MergedTelemetry AS T
+	ON L.LapId = T.LapId
+
+	WHERE S.id = @SessionId
+	AND T.[Source] = 'car'
+	AND L.LapId IS NOT NULL
+
+END
+GO

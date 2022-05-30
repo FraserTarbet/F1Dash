@@ -618,3 +618,33 @@ BEGIN
 
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_CarDataNorms
+GO
+CREATE PROCEDURE dbo.Read_CarDataNorms @EventId INT, @SessionName VARCHAR(MAX)
+AS
+BEGIN
+	
+	SELECT MIN(T.RPMMin) AS RPMMin
+		,MAX(T.RPMMax) AS RPMMax
+		,MIN(T.SpeedMin) AS SpeedMin
+		,MAX(T.SpeedMax) AS SpeedMax
+		,MIN(T.GearMin) AS GearMin
+		,MAX(T.GearMax) AS GearMax
+		,MIN(T.ThrottleMin) AS ThrottleMin
+		,MAX(T.ThrottleMax) AS ThrottleMax
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.CarDataNorms AS T
+	ON S.id = T.SessionId
+
+	WHERE EventId = @EventId
+	AND (
+		SessionName = @SessionName
+		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+	)
+
+END
+GO

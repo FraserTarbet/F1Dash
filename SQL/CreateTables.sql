@@ -289,3 +289,18 @@ CREATE TABLE dbo.Zone(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE CLUSTERED INDEX IndexLapIdZoneNumber ON dbo.Zone (LapId, ZoneNumber)
+
+
+DROP TABLE IF EXISTS dbo.CarDataNorms
+CREATE TABLE dbo.CarDataNorms(
+	SessionId INT PRIMARY KEY
+	,RPMMin INT
+	,RPMMax INT
+	,SpeedMin INT
+	,SpeedMax INT
+	,GearMin INT
+	,GearMax INT
+	,ThrottleMin INT
+	,ThrottleMax INT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)
