@@ -239,7 +239,7 @@ def build_lap_plot(data_dict, filters, client_info):
             if len(title_values) > i + 1: title_values_string += ", "
         title_values_string += " per Lap"
 
-    if filter_exists(filters, "LapId"):
+    if not client_info["isMobile"] and filter_exists(filters, "LapId"):
         subtitle = "<br><sup>Double click to clear lap selection</sup>"
     else:
         subtitle = "<br><sup>Select points to cross filter by lap</sup>"
@@ -614,7 +614,7 @@ def build_track_map(data_dict, filters, client_info):
             title_filter = ""
         title_main = f"<b>Fastest Driver per {title_section}</b>{title_filter}"
 
-    if filter_exists(filters, section_identifier):
+    if not client_info["isMobile"] and filter_exists(filters, section_identifier):
         subtitle = f"<br><sup>Double click to clear {title_section.lower()} selection</sup>"
     else:
         subtitle = f"<br><sup>Select sections to cross filter by {title_section.lower()}</sup>"
