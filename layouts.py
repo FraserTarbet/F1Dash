@@ -280,7 +280,7 @@ layout_desktop = [
                                 ],
                                 xs=2
                             ),
-                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.70rem", "margin-left": "30px"}), align="start", xs=2)
+                            dbc.Col(html.Div(id="track_map_readout", style={"font-size": "0.70rem", "float": "right"}), align="start", xs=2)
                         ],
                         align="center", justify="evenly"
                     ),
