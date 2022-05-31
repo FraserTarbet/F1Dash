@@ -97,11 +97,11 @@ BEGIN
 
 	FROM dbo.Session AS S
 
-	INNER JOIN dbo.MergedLapData AS L
-	ON S.id = L.SessionId
-
 	INNER JOIN dbo.MergedTelemetry AS T
-	ON L.LapId = T.LapId
+	ON S.id = T.SessionId
+
+	INNER JOIN dbo.MergedLapData AS L
+	ON T.LapId = L.LapId
 
 	INNER JOIN dbo.DriverInfo AS D
 	ON S.id = D.SessionId
@@ -117,10 +117,10 @@ BEGIN
 	)
 	AND T.[Source] = 'car'
 	AND (
-		L.LapId = @LapIdA
-		OR L.LapId = @LapIdB
+		T.LapId = @LapIdA
+		OR T.LapId = @LapIdB
 	)
-	AND L.LapId IS NOT NULL
+	AND T.LapId IS NOT NULL
 
 END
 GO
