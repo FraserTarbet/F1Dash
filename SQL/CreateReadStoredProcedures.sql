@@ -61,7 +61,7 @@ GO
 
 DROP PROCEDURE IF EXISTS dbo.Read_CarData
 GO
-CREATE PROCEDURE dbo.Read_CarData @EventId INT, @SessionName VARCHAR(MAX)
+CREATE PROCEDURE dbo.Read_CarData @EventId INT, @SessionName VARCHAR(MAX), @LapIdA INT, @LapIdB INT
 AS
 BEGIN
 
@@ -97,11 +97,11 @@ BEGIN
 
 	FROM dbo.Session AS S
 
-	INNER JOIN dbo.MergedLapData AS L
-	ON S.id = L.SessionId
-
 	INNER JOIN dbo.MergedTelemetry AS T
-	ON L.LapId = T.LapId
+	ON S.id = T.SessionId
+
+	INNER JOIN dbo.MergedLapData AS L
+	ON T.LapId = L.LapId
 
 	INNER JOIN dbo.DriverInfo AS D
 	ON S.id = D.SessionId
@@ -116,6 +116,11 @@ BEGIN
 		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 	)
 	AND T.[Source] = 'car'
+	AND (
+		T.LapId = @LapIdA
+		OR T.LapId = @LapIdB
+	)
+	AND T.LapId IS NOT NULL
 
 END
 GO
@@ -610,6 +615,36 @@ BEGIN
 
 	ORDER BY TeamOrder ASC
 		,DriverOrder ASC
+
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Read_CarDataNorms
+GO
+CREATE PROCEDURE dbo.Read_CarDataNorms @EventId INT, @SessionName VARCHAR(MAX)
+AS
+BEGIN
+	
+	SELECT MIN(T.RPMMin) AS RPMMin
+		,MAX(T.RPMMax) AS RPMMax
+		,MIN(T.SpeedMin) AS SpeedMin
+		,MAX(T.SpeedMax) AS SpeedMax
+		,MIN(T.GearMin) AS GearMin
+		,MAX(T.GearMax) AS GearMax
+		,MIN(T.ThrottleMin) AS ThrottleMin
+		,MAX(T.ThrottleMax) AS ThrottleMax
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.CarDataNorms AS T
+	ON S.id = T.SessionId
+
+	WHERE EventId = @EventId
+	AND (
+		SessionName = @SessionName
+		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+	)
 
 END
 GO

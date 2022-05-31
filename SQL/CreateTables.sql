@@ -203,7 +203,7 @@ CREATE CLUSTERED INDEX IndexSessionIdId ON dbo.WeatherData (SessionId, Id)
 
 DROP TABLE IF EXISTS dbo.MergedTelemetry
 CREATE TABLE dbo.MergedTelemetry(
-	id INT IDENTITY(0, 1) PRIMARY KEY
+	id INT IDENTITY(0, 1)
 	,SessionId INT
 	,Driver INT
 	,LapId INT
@@ -232,7 +232,7 @@ CREATE TABLE dbo.MergedTelemetry(
 	,DRSActive BIT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE NONCLUSTERED INDEX IndexLapId ON dbo.MergedTelemetry (LapId)
+CREATE CLUSTERED INDEX IndexSessionIdLapId ON dbo.MergedTelemetry (SessionId, LapId)
 
 
 DROP TABLE IF EXISTS dbo.MergedLapData
@@ -289,3 +289,18 @@ CREATE TABLE dbo.Zone(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE CLUSTERED INDEX IndexLapIdZoneNumber ON dbo.Zone (LapId, ZoneNumber)
+
+
+DROP TABLE IF EXISTS dbo.CarDataNorms
+CREATE TABLE dbo.CarDataNorms(
+	SessionId INT PRIMARY KEY
+	,RPMMin INT
+	,RPMMax INT
+	,SpeedMin INT
+	,SpeedMax INT
+	,GearMin INT
+	,GearMax INT
+	,ThrottleMin INT
+	,ThrottleMax INT
+	,CreatedDateTime DATETIME DEFAULT GETDATE()
+)

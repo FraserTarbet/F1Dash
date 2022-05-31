@@ -118,7 +118,6 @@ dash_app = DashProxy(__name__,
         {"name": "viewport", "content": "width=device-width, initial-scale=1"}
     ],
     transforms=[ServersideOutputTransform()]
-    # suppress_callback_exceptions=True
 )
 app = dash_app.server
 dash_app.title = "F1Dash"
@@ -131,6 +130,7 @@ dash_app.layout = html.Div(
         dcc.Store(id="selected_session", storage_type="memory"),
         dcc.Store(id="loaded_session", storage_type="memory"),
         dcc.Store(id="datasets", storage_type="memory"),
+        dcc.Store(id="stored_telemetry", storage_type="memory"),
         dbc.Container(
             id="container",
             fluid=True
@@ -650,6 +650,7 @@ def stint_graph_refresh(
     Output("inputs_graph", "figure"),
     Output("input_trace_selector_div", "hidden"),
     Output("inputs_graph_loading", "children"),
+    Output("stored_telemetry", "data"),
     Input("team_filter_dropdown", "value"),
     Input("driver_filter_dropdown", "value"),
     Input("compound_filter_dropdown", "value"),
@@ -658,7 +659,9 @@ def stint_graph_refresh(
     Input("track_map", "selectedData"),
     Input("input_trace_selector", "value"),
     Input("datasets", "data"),
-    State("client_info", "data")
+    Input("selected_session", "data"),
+    State("client_info", "data"),
+    State("stored_telemetry", "data") 
 )
 def inputs_graph_refresh(
     team_filter_values,
@@ -669,20 +672,24 @@ def inputs_graph_refresh(
     track_map_selection,
     input_trace_selector_values,
     datasets,
-    client_info
+    selected_session,
+    client_info,
+    stored_telemetry
 ):
     if light_version:
         return (
             no_update,
             no_update,
+            no_update,
             no_update
         )
     elif datasets is None:
-        figure, data_displayed = visuals.build_inputs_graph(datasets, [], client_info)
+        figure, data_displayed = visuals.build_inputs_graph(datasets, [], client_info, None)
         return (
             figure,
             True,
-            False
+            False,
+            no_update
         )
     else:
         if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
@@ -700,11 +707,23 @@ def inputs_graph_refresh(
                 "SectorOrZoneNumber": track_map_selection,
                 "input_trace": input_trace_selector_values
             })
-        figure, data_displayed = visuals.build_inputs_graph(datasets, filters, client_info)
+        
+        if callback_context.triggered[0]["prop_id"].split(".")[0] in ["input_trace_selector", "track_map"]:
+            data = stored_telemetry
+            stored_telemetry_output = no_update
+        else:
+            selected_session = json.loads(selected_session)
+            lap_ids = filters["LapId"] if "LapId" in filters else [-1]
+            data = read_database.read_car_data(selected_session["EventId"], selected_session["SessionName"], lap_ids)
+            stored_telemetry_output = data.to_dict("records")
+
+        figure, data_displayed = visuals.build_inputs_graph(datasets, filters, client_info, data)
+
         return (
             figure,
             not data_displayed,
-            True
+            True,
+            stored_telemetry_output
         )
 
 
@@ -727,6 +746,9 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
                 "TimeFilter": conditions_plot_selection
             })
             return visuals.shade_conditions_plot(conditions_plot_state, filter)
+
+
+
 
         
 if __name__ == "__main__":
