@@ -6,7 +6,7 @@
 <img src="./assets/screenshot.png">
 \
 \
-A lightweight version of the app is [hosted on Azure here](https://f1dash.azurewebsites.net/). In order to reduce the size of the data (and therefore processing times and hosting costs) this version does not include the detailed telemetry visuals included in the main version. *Please note: The Azure app may not always be running, since there is a small cost incurred by hosting.*
+A live instance of the app is [hosted on Azure here](https://f1dash.azurewebsites.net/). Please note that this version may not always be running, since there is a small cost incurred by hosting.
 
 The app, from a user perspective, is hopefully quite self-explanatory to anyone who has used an interactive dashboard (e.g. Tableau, Power BI, etc.) before. It is recommended to view the app on desktop rather than mobile; mobile functionality is more limited for practical reasons.
 
