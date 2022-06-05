@@ -1544,7 +1544,7 @@ BEGIN
 	,SenseCheck AS (
 		SELECT *
 			,CASE
-				WHEN ZoneTime IS NULL THEN 0
+				WHEN ZoneTime IS NULL OR ZoneTime <= 0 THEN 0
 				WHEN LAG(NumberOfLaps, 1, 0) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) < NumberOfLaps - 1 THEN 1
 				WHEN LEAD(NumberOfLaps, 1, 999) OVER(PARTITION BY Driver ORDER BY NumberOfLaps ASC, ZoneNumber ASC) > NumberOfLaps + 1 THEN 1
 				WHEN ZScore < @NegativeZScoreThreshold AND (PreviousZScore > @PositiveZScoreThreshold OR NextZScore > @PositiveZScoreThreshold) THEN 0
