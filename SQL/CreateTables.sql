@@ -18,6 +18,15 @@ CREATE TABLE dbo.Log_App(
 	,LogMessage NVARCHAR(MAX)
 )
 
+DROP TABLE IF EXISTS dbo.ThreadCheckin
+CREATE TABLE dbo.ThreadCheckin(
+	id INT IDENTITY(0, 1) PRIMARY KEY
+	,CheckinDateTime DATETIME DEFAULT GETDATE()
+	,CheckinType VARCHAR(MAX)
+	,HostName VARCHAR(MAX)
+	,WorkerIdentifier VARCHAR(MAX)
+)
+
 DROP TABLE IF EXISTS dbo.Event
 CREATE TABLE dbo.Event(
 	id INT PRIMARY KEY
@@ -304,3 +313,4 @@ CREATE TABLE dbo.CarDataNorms(
 	,ThrottleMax INT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
+
