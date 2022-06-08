@@ -14,7 +14,7 @@ There are four main visual elements:
 
 1. A scatter plot of every driver's times, which can be used to filter down to individual laps.
 2. A line graph showing drivers' times as the session or filtered stint progresses.
-3. A map of the track, highlighting fastest drivers in each sector or zone, which can be used to filter down to particular sections of track.
+3. A map of the track, highlighting fastest drivers in each sector, which can be used to filter down to particular sections of track.
 4. A graph presenting car telemetry, i.e. speed, gears, throttle, brakes and RPM. Two laps can be compared side-by-side.
 
 A filter pane can be expanded to view specific teams/drivers/compounds, and the desktop version also includes a panel covering track conditions such as weather, track activity, and session status. This visual can also be used to filter the rest of the dashboard to a particular time period.
@@ -49,8 +49,7 @@ The app requires some heavy data transformations that would be impractical withi
 
 1. Raw lap data is enriched with tyre compound information, linked to weather, individual stints are identified, and laps are identified as being clean/unclean.
 2. As received, the raw telemetry data is split into two time series datasets: position data (coordinates of where the car is on track at a given time) and car data (speed, gear, throttle application, etc.). These datasets do not align, and hence some interpolation is required to calculate, for instance, what gear a car was *probably* in at a given position, or *approximately* where a driver started to apply the brakes (see caveats section for more detail on potential telemetry pitfalls). The datasets are merged into a single table, and each row of data is related to a lap.
-3. The raw data does not contain any information on the track layout, so part of the transformation process involves creating a picture of the track based on telemetry. Using the official sector times, it's possible to divide this into sectors, and on top of that I've also used driver inputs to divide the track into "zones" - typically corner entries/exits and straights.
-4. Finally, times are calculated for the zones. This requires a lot of interpolation - see caveats section.
+3. The raw data does not contain any information on the track layout, so part of the transformation process involves creating a picture of the track based on telemetry. Using the official sector times, it's possible to divide this into sectors.
 
 ### Dash app
 Dash apps (which are built on Flask) are single threaded, but two additional looping threads are created on startup:
@@ -63,13 +62,23 @@ The Dash app itself is managed primarily through callbacks (please refer to the 
 - To load a session selected by the user, various SQL stored procedures are called to pull the data. This data needs to be shared between callbacks, and 'vanilla' Dash essentially offers two approaches to this: load the datasets into client memory (the datasets are far too large and require constant serialising/deserialising to/from JSON), or load all data for all sessions into the app at startup (which would cause a huge memory overhead). However, dash-extensions offers [a way around this](https://www.dash-extensions.com/transforms/serverside-output-transform), allowing the app to load a selected session to a serverside cache and query it on the fly without any heavy JSON deserialising. As a bonus, if any user requests that same session within a certain time frame, they will query the existing cached version rather than pulling new data from SQL.
 - All visuals are built using plotly's lower-level graph_objects library; plotly.express isn't flexible enough for a lot of the presentation and styling required. Slightly different interactions are configured for the visuals depending upon whether the client is on mobile. For example, hover interactions are disabled because they don't work very well on a device without a cursor.
 
+
+
+### A note on threading and multiple instances
+
+This app was originally written to run as a single instance, with a single gunicorn worker, and in that case a simple approach to creating additional threads for database updates and cache deletions worked great. However, I'd like to share this dashboard more widely within the F1 community, which requires scaling up/out the app instances, which in turn will cause conflicts as multiple instances each try to run the database updates.
+
+To get around this, the back end database now contains a table in which threads 'check in', to prevent worker 1 on instance A from running a process that worker 2 on instance B is already handling.
+
+If I were to start this project from scratch, I would probably split it into two separate repos entirely, and put the update functionality on its own Azure function app.
+
 ---
 
 ## Caveats
 
 As touched on above, the telemetry data has some issues and hence anything relying upon it should be approached with caution. Interpolation of the position and car datasets mean there's an inherent inaccuracy, and the source samples themselves are already only taken at roughly 4Hz plus/minus jitter. This means that, for example, the position at which gear changes take place will be quite inaccurate when the car is travelling at high speeds.
 
-Particular caution should be applied to the 'zone' times. Whereas sector times come from the official source, zone times are essentially based on when a car is estimated to have passed a certain point on track, based on the times/distance at which they were sampled either side of that point. I've made an effort to remove obviously erroneous data caused by lags in the source data or incorrect interpolations, but it's impossible to do this completely accurately. Having said that, I believe they are still a useful compliment to sector times, and I've been reassured to see them align to what I was expecting based on following F1 for a few years myself.
+Part of the transformation process creates track 'zones' based on lap telemetry data. These are based on driver inputs, and generally represent areas of braking, acceleration and straights. Particular caution should be applied to these zone times. Whereas sector times come from the official source, zone times are essentially based on when a car is estimated to have passed a certain point on track, based on the times/distance at which they were sampled either side of that point. I've made an effort to remove obviously erroneous data caused by lags in the source data or incorrect interpolations, but it's impossible to do this completely accurately. For the time being at least, I have removed this functionality from the dashboard itself, but may revisit it in future if I can improve its accuracy/reliability.
 
 It should also be noted that unclean laps (i.e. a lap unrepresentative of a driver's pace) cannot be identified completely reliably by their very nature. It's simple enough to remove in/out laps and laps under safety cars, etc. However, in order to filter out warm-up laps it was necessary to add a time threshold - it's possible that a particularly hot warm-up lap could slip through the net, and vice versa. In future, I may amend this logic to look for other clues, such as a driver not being at full throttle on straights.
 
@@ -79,6 +88,6 @@ It should also be noted that unclean laps (i.e. a lap unrepresentative of a driv
 
 Besides some optimisation and code refactoring, there are some additional features I intend to work into this project:
 
-- **Split track into corners/straights:** Sectors are too broad, but zones are too narrow - often a driver will appear fast on the way into the corner, just to be slow out of it. It would be more useful to understand a driver's performance in a particular corner as a whole, and to categorise corners into low/medium/fast speed. This would help build a picture of what track features play to certain cars' strengths.
-- **Improve mobile functionality:** An app like this is not very well suited to mobile, particularly when viewing a lot of data points. Also, plotly visuals behave strangely, e.g. a double tap is not always recognised as a double click. There's room for improvement here.
+- **Analyse performance through track features:** Sectors are very broad sections of track, always containing a combination of straights and corners of varying speeds, and as such they don't provide much insight into what track features suit a certain driver/car. I would like to explore what is possible in this regard, however the telemetry data is not sufficient to give a reliable times in/out of corners, etc. I may look into some form of proxy indicator, such as minimum speeds through each corner.
+- **Improve mobile functionality:** An app like this is not very well suited to mobile, particularly when viewing a lot of data points. There's room for improvement here.
 - **Incorporate tyre age/lifespan into visuals:** Rather than an overview of times over a stint, a plot of times vs. tyre age may be more illuminating.

@@ -1072,7 +1072,7 @@ def build_conditions_plot(data_dict, client_info):
                     hoverinfo="text" if metric_dict["hoverable"] == True else "none",
                     hovertext=data["text_" + metric] if metric_dict["hoverable"] == True else "", 
                     marker_color=metric_dict["colour"],
-                    fill="toself"
+                    fill="none"
                 )
             )
         elif metric_dict["trace_type"] == "annotation":
