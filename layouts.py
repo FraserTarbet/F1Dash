@@ -2,6 +2,7 @@ from dash import dcc, html
 import dash_bootstrap_components as dbc
 
 light_version = None
+allow_zones = None
 
 heights_dict = {
     "desktop": {
@@ -136,21 +137,24 @@ parameters_panel_children = [
                 align="center",
                 style={"margin-bottom": "5px"}
             ),
-            dbc.Row(
-                [
-                    dbc.Col(dbc.Label("Split laps by: ", style={"color": "#F7F4F1"}), xs=4),
-                    dbc.Col(dbc.RadioItems(
-                        id="track_split_selector", 
-                        options=[{"label": "Sectors", "value": "sectors"}, {"label": "Zones", "value": "zones"}],
-                        value="sectors",
-                        inline=True,
-                        style={"color": "#F7F4F1"}
-                        ),
-                        lg = 8
-                    )
-                ],
-                align="center",
-                style={"margin-bottom": "5px"}
+            html.Div(
+                hidden=True,
+                children=dbc.Row(
+                    [
+                        dbc.Col(dbc.Label("Split laps by: ", style={"color": "#F7F4F1"}), xs=4),
+                        dbc.Col(dbc.RadioItems(
+                            id="track_split_selector", 
+                            options=[{"label": "Sectors", "value": "sectors"}, {"label": "Zones", "value": "zones"}],
+                            value="sectors",
+                            inline=True,
+                            style={"color": "#F7F4F1"}
+                            ),
+                            lg = 8
+                        )
+                    ],
+                    align="center",
+                    style={"margin-bottom": "5px"}
+                ),
             ),
             dbc.Row(
                 [
