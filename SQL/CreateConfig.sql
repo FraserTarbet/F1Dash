@@ -26,3 +26,4 @@ VALUES
 ,('CacheFileDeleteDelayInHours', '2')
 ,('DatabaseThreadSleepInHours', '1')
 ,('CacheThreadSleepInHours', '0.5')
+,('ThreadMaxWakeupDelayInSeconds', '60')
