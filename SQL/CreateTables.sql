@@ -24,7 +24,7 @@ CREATE TABLE dbo.ThreadCheckin(
 	,CheckinDateTime DATETIME DEFAULT GETDATE()
 	,CheckinType VARCHAR(MAX)
 	,HostName VARCHAR(MAX)
-	,WorkerIdentifier VARCHAR(MAX)
+	,ThreadId VARCHAR(MAX)
 )
 
 DROP TABLE IF EXISTS dbo.Event
