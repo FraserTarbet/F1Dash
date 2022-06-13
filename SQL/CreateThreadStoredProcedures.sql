@@ -14,7 +14,7 @@ AS BEGIN
 		,@LastThreadId VARCHAR(MAX)
 
 	SET @TimeAllowance = (
-		SELECT  (CAST([Value] AS FLOAT) / 24) * 4 -- Allow 4* the thread sleep time before taking over, giving update process plenty of window to complete
+		SELECT  (CAST([Value] AS FLOAT) / 24) * 8 -- Allow 8* the thread sleep time before taking over, giving update process plenty of window to complete
 
 		FROM dbo.Config_App
 
