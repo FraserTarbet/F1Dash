@@ -69,6 +69,7 @@ BEGIN
 			,TrackStatus
 			,CASE
 				WHEN TrackStatus <> 'AllClear' THEN 0
+				WHEN LapTime IS NULL THEN 0
 				WHEN LapTime > MIN(LapTime) OVER(PARTITION BY Driver, Compound) * @CleanLapTimeThreshold THEN 0
 				WHEN COALESCE(PitOutTime, PitInTime) IS NOT NULL THEN 0
 				WHEN LapTime = MIN(LapTime) OVER(PARTITION BY Driver) AND IsPersonalBest = 0 THEN 0
