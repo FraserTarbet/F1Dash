@@ -95,7 +95,7 @@ BEGIN
 	WHERE (
 		@ForceEventId IS NULL
 		AND @ForceSessionId IS NULL
-		AND DATEADD(HOUR, COALESCE(O.UTCOffset, 0) + @HoursToWaitBeforeLoading, SessionDate) < GETDATE()
+		AND DATEADD(HOUR, -COALESCE(O.UTCOffset, 0) + @HoursToWaitBeforeLoading, SessionDate) < GETDATE()
 		AND (LoadStatus = 0  OR LoadStatus IS NULL)
 		AND F1ApiSupport = 1
 		AND SessionDate >= @SinceDate
@@ -131,7 +131,6 @@ BEGIN
 	WHERE (
 		@ForceEventId IS NULL
 		AND @ForceSessionId IS NULL
-		AND SessionDate < GETDATE()
 		AND TransformStatus IS NULL -- Won't try to run on previously failed loads (0)
 		AND LoadStatus = 1 -- Only transform once session is fully loaded
 		AND F1ApiSupport = 1
