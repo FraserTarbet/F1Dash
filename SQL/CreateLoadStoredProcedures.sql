@@ -492,3 +492,4 @@ BEGIN
 
 	WHERE id = @SessionId
 END
+GO
