@@ -995,7 +995,9 @@ def build_conditions_plot(data_dict, client_info):
         "Red": "#FF1E00",
         "Yellow": "#f7e115",
         "SCDeployed": "#f56b0e",
-        "VSCDeployed": "#b228ad"
+        "SCEnding": "#f56b0e",
+        "VSCDeployed": "#b228ad",
+        "VSCEnding": "#b228ad"
     }
 
     metrics = {
@@ -1094,6 +1096,10 @@ def build_conditions_plot(data_dict, client_info):
     for status_id in status_id_list:
         trace_data = data[(data["TrackStatusId"] == status_id)]
         status = trace_data["TrackStatus"].iloc[0]
+        if status in status_colours:
+            status_colour = status_colours[status]
+        else:
+            status_colour = "#5B5B61"
         fig.add_trace(
             go.Scatter(
                 x=trace_data["SessionTime"],
@@ -1101,7 +1107,7 @@ def build_conditions_plot(data_dict, client_info):
                 mode="lines+markers",
                 line_width=5,
                 fill="toself",
-                marker_color=status_colours[status],
+                marker_color=status_colour,
                 marker_size=0.5,
                 hoverinfo="text",
                 hovertext=status
