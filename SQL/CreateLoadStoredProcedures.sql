@@ -1,4 +1,4 @@
-USE F1Dash
+USE F1DashStreamline
 GO
 
 DROP PROCEDURE IF EXISTS dbo.Get_MaxId
