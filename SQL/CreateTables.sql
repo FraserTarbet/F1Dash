@@ -251,6 +251,7 @@ CREATE CLUSTERED INDEX IndexSessionIdLapIdSectorNumber ON dbo.MergedCarData (Ses
 DROP TABLE IF EXISTS dbo.TrackMap
 CREATE TABLE dbo.TrackMap(
 	EventId INT
+	,SampleId INT
 	,X INT
 	,Y INT
 	,Z INT

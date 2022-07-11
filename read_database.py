@@ -35,19 +35,16 @@ def get_available_sessions():
     return sessions_frame
 
 
-def read_session_data(event_id, session_name, use_test_data):
+def read_session_data(event_id, session_name):
 
     time_start = datetime.now()
 
     def read_sp(sqlalchemy_engine, sp_suffix, event_id, session_name, data_dict_list, data_key):
 
-        if use_test_data == True:
-            sql = f"SELECT * FROM TestData_{sp_suffix}"
+        if data_key == "track_map":
+            sql = f"EXEC dbo.Read_{sp_suffix} @EventId={event_id};"
         else:
-            if data_key == "track_map":
-                sql = f"EXEC dbo.Read_{sp_suffix} @EventId={event_id};"
-            else:
-                sql = f"EXEC dbo.Read_{sp_suffix} @EventId={event_id}, @SessionName='{session_name}';"
+            sql = f"EXEC dbo.Read_{sp_suffix} @EventId={event_id}, @SessionName='{session_name}';"
 
         data = pd.read_sql_query("SET NOCOUNT ON; " + sql, sqlalchemy_engine)
         data_dict = {data_key: data}

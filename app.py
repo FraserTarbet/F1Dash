@@ -336,8 +336,7 @@ def load_datasets(selected_session):
         event_id = selected_session["EventId"]
         session_name = selected_session["SessionName"]
         
-        use_test_data = True if config["ForceTestData"] == "1" else False
-        data_dict = read_database.read_session_data(event_id, session_name, use_test_data)
+        data_dict = read_database.read_session_data(event_id, session_name)
         
         return (
             data_dict

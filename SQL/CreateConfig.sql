@@ -13,7 +13,8 @@ INSERT INTO dbo.Config_App(
 	,[Value]
 )
 VALUES
-('EnableDatabaseThread', '0')
+('RunLightVersion', '0')
+,('EnableDatabaseThread', '0')
 ,('EnableCacheCleanupThread', '0')
 ,('OldestDateToLoad', '2022-01-01')
 ,('MaxAbortedLoads', '3')

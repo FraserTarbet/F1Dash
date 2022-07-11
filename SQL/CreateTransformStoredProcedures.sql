@@ -331,12 +331,14 @@ BEGIN
 	)
 	INSERT INTO dbo.TrackMap(
 		EventId
+		,SampleId
 		,X
 		,Y
 		,Z
 		,SectorNumber
 	)
 	SELECT @EventId
+		,ROW_NUMBER() OVER(ORDER BY [Time] ASC) AS SampleId
 		,X
 		,Y
 		,Z

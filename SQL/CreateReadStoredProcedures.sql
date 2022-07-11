@@ -1,62 +1,4 @@
-USE F1Dash
-
-DROP PROCEDURE IF EXISTS dbo.Read_PositionData
-GO
-CREATE PROCEDURE dbo.Read_PositionData @EventId INT, @SessionName VARCHAR(MAX)
-AS
-BEGIN
-
-	/*
-		Position data for track map
-	*/
-
-	SELECT L.Driver
-		,L.LapId
-		,L.NumberOfLaps
-		,L.StintNumber
-		,L.LapsInStint
-		,L.IsPersonalBest
-		,L.Compound
-		,L.CleanLap
-		,T.id AS SampleId
-		,T.NearestNonSourceId AS CarSampleId
-		,T.SectorNumber
-		,T.ZoneNumber
-		,T.[Time] + SO.SessionTimeOffset AS SessionTime
-		,T.X
-		,T.Y
-		,T.Speed
-		,T.Gear
-		,T.Brake
-		,T.BrakeOrGearId
-		,T.BrakeOrGear
-		,D.Tla
-		,D.TeamColour
-
-	FROM dbo.Session AS S
-
-	INNER JOIN dbo.MergedLapData AS L
-	ON S.id = L.SessionId
-
-	INNER JOIN dbo.MergedTelemetry AS T
-	ON L.LapId = T.LapId
-
-	INNER JOIN dbo.DriverInfo AS D
-	ON S.id = D.SessionId
-	AND L.Driver = D.RacingNumber
-
-	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
-	ON S.id = SO.SessionId
-
-	WHERE EventId = @EventId
-	AND (
-		SessionName = @SessionName
-		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
-	)
-	AND T.[Source] = 'pos'
-
-END
-GO
+USE F1DashStreamline
 
 
 DROP PROCEDURE IF EXISTS dbo.Read_CarData
@@ -77,27 +19,20 @@ BEGIN
 		,L.IsPersonalBest
 		,L.Compound
 		,L.CleanLap
-		,T.id AS SampleId
-		,T.NearestNonSourceId AS PositionSampleId
 		,T.SectorNumber
-		,T.ZoneNumber
 		,T.[Time] + SO.SessionTimeOffset AS SessionTime
 		,T.RPM
 		,T.Speed
 		,T.Gear
 		,T.Throttle
 		,T.Brake
-		,T.DRS
-		,T.DRSOpen
-		,T.DRSClose
-		,T.DRSActive
 		,D.Tla
 		,D.TeamColour
 		,D.DriverOrder
 
 	FROM dbo.Session AS S
 
-	INNER JOIN dbo.MergedTelemetry AS T
+	INNER JOIN dbo.MergedCarData AS T
 	ON S.id = T.SessionId
 
 	INNER JOIN dbo.MergedLapData AS L
@@ -115,7 +50,6 @@ BEGIN
 		SessionName = @SessionName
 		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 	)
-	AND T.[Source] = 'car'
 	AND (
 		T.LapId = @LapIdA
 		OR T.LapId = @LapIdB
@@ -133,14 +67,13 @@ AS
 BEGIN
 
 	/*
-		Event track map. Handy for plotting fastest sectors/zones.
+		Event track map. Handy for plotting fastest sectors.
 	*/
 
 	SELECT SampleId
 		,X
 		,Y
 		,SectorNumber
-		,ZoneNumber
 
 	FROM dbo.TrackMap
 
@@ -261,70 +194,6 @@ BEGIN
 		SessionName = @SessionName
 		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 	)
-
-	ORDER BY D.TeamOrder ASC
-	,D.DriverOrder ASC
-	,OS.OffsetStintNumber ASC
-	,LapsInStint ASC
-
-END
-GO
-
-
-DROP PROCEDURE IF EXISTS dbo.Read_ZoneTimes
-GO
-CREATE PROCEDURE dbo.Read_ZoneTimes @EventId INT, @SessionName VARCHAR(MAX)
-AS
-BEGIN
-
-	/*
-		Zone times for lap scatter plot and stint line graph
-	*/
-
-	SELECT L.Driver
-		,L.LapId
-		,L.NumberOfLaps
-		,L.StintId
-		,OS.OffsetStintNumber AS StintNumber
-		,L.LapsInStint
-		,L.IsPersonalBest
-		,L.Compound
-		,L.TyreAge
-		,L.CleanLap
-		,L.TimeEnd + SO.SessionTimeOffset AS SessionTime
-		,Z.ZoneNumber
-		,Z.ZoneTime
-		,D.Tla
-		,D.TeamName
-		,D.TeamColour
-		,D.TeamOrder
-		,D.DriverOrder
-
-	FROM dbo.Session AS S
-
-	INNER JOIN dbo.MergedLapData AS L
-	ON S.id = L.SessionId
-
-	INNER JOIN dbo.Zone AS Z
-	ON L.LapId = Z.LapId
-
-	INNER JOIN dbo.DriverInfo AS D
-	ON S.id = D.SessionId
-	AND L.Driver = D.RacingNumber
-
-	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
-	ON S.id = SO.SessionId
-
-	INNER JOIN dbo.OffsetStintNumbers(@EventId, @SessionName) AS OS
-	ON L.StintId = OS.StintId
-
-	WHERE EventId = @EventId
-	AND (
-		SessionName = @SessionName
-		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
-	)
-	AND Z.ZoneTime > 0 -- Filter out crazy times from first lap - think it's caused by cars moving around prior to race.
-	AND Z.SenseCheck = 1
 
 	ORDER BY D.TeamOrder ASC
 	,D.DriverOrder ASC
