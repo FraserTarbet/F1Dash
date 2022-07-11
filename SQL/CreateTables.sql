@@ -1,4 +1,4 @@
-USE F1Dash
+USE F1DashStreamline
 
 DROP TABLE IF EXISTS dbo.Log_Data
 CREATE TABLE dbo.Log_Data(
@@ -85,6 +85,7 @@ CREATE TABLE dbo.Sector(
 )
 CREATE NONCLUSTERED INDEX IndexLapId ON dbo.Sector (LapId)
 
+
 DROP TABLE IF EXISTS dbo.SpeedTrap
 CREATE TABLE dbo.SpeedTrap(
 	id INT IDENTITY(0, 1) PRIMARY KEY
@@ -94,6 +95,7 @@ CREATE TABLE dbo.SpeedTrap(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE NONCLUSTERED INDEX IndexLapId ON dbo.SpeedTrap (LapId)
+
 
 DROP TABLE IF EXISTS dbo.TimingData
 CREATE TABLE dbo.TimingData(
@@ -115,6 +117,7 @@ CREATE TABLE dbo.TimingData(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE CLUSTERED INDEX IndexSessionId ON dbo.TimingData (SessionId)
+
 
 DROP TABLE IF EXISTS dbo.CarData
 CREATE TABLE dbo.CarData(
@@ -151,6 +154,7 @@ CREATE TABLE dbo.PositionData(
 CREATE CLUSTERED INDEX IndexSessionId ON dbo.PositionData (SessionId)
 CREATE NONCLUSTERED INDEX IndexDriver ON dbo.PositionData (Driver)
 
+
 DROP TABLE IF EXISTS dbo.TrackStatus
 CREATE TABLE dbo.TrackStatus(
 	SessionId INT
@@ -161,6 +165,7 @@ CREATE TABLE dbo.TrackStatus(
 )
 CREATE CLUSTERED INDEX IndexSessionId ON dbo.TrackStatus (SessionId)
 
+
 DROP TABLE IF EXISTS dbo.SessionStatus
 CREATE TABLE dbo.SessionStatus(
 	SessionId INT
@@ -169,6 +174,7 @@ CREATE TABLE dbo.SessionStatus(
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
 CREATE CLUSTERED INDEX IndexSessionId ON dbo.SessionStatus (SessionId)
+
 
 DROP TABLE IF EXISTS dbo.DriverInfo
 CREATE TABLE dbo.DriverInfo(
@@ -210,40 +216,6 @@ CREATE TABLE dbo.WeatherData(
 CREATE CLUSTERED INDEX IndexSessionIdId ON dbo.WeatherData (SessionId, Id)
 
 
-DROP TABLE IF EXISTS dbo.MergedTelemetry
-CREATE TABLE dbo.MergedTelemetry(
-	id INT IDENTITY(0, 1)
-	,SessionId INT
-	,Driver INT
-	,LapId INT
-	,NearestNonSourceId INT
-	,SectorNumber INT
-	,ZoneNumber INT
-	,ZoneInputCategory INT
-	,InPits BIT
-	,[Time] FLOAT
-	,TimeSinceLastSample FLOAT
-	,[Source] VARCHAR(MAX)
-	,[Status] VARCHAR(MAX)
-	,X INT
-	,Y INT
-	,Z INT
-	,RPM INT
-	,Speed INT
-	,Gear INT
-	,Throttle INT
-	,Brake BIT
-	,DRS INT
-	,BrakeOrGearId INT
-	,BrakeOrGear INT
-	,DRSOpen BIT
-	,DRSClose BIT
-	,DRSActive BIT
-	,CreatedDateTime DATETIME DEFAULT GETDATE()
-)
-CREATE CLUSTERED INDEX IndexSessionIdLapId ON dbo.MergedTelemetry (SessionId, LapId)
-
-
 DROP TABLE IF EXISTS dbo.MergedLapData
 CREATE TABLE dbo.MergedLapData(
 	SessionId INT
@@ -279,25 +251,9 @@ CREATE TABLE dbo.TrackMap(
 	,Y INT
 	,Z INT
 	,SectorNumber INT
-	,ZoneNumber INT
-	,ZoneInputCategory INT
 	,CreatedDateTime DATETIME DEFAULT GETDATE()
 )
-CREATE CLUSTERED INDEX IndexXY ON dbo.TrackMap (X, Y)
-CREATE NONCLUSTERED INDEX IndexEventId ON dbo.TrackMap (EventId)
-
-
-DROP TABLE IF EXISTS dbo.Zone
-CREATE TABLE dbo.Zone(
-	id INT IDENTITY(0, 1)
-	,LapId INT
-	,ZoneNumber INT
-	,ZoneTime FLOAT
-	,ZoneSessionTime FLOAT
-	,SenseCheck BIT
-	,CreatedDateTime DATETIME DEFAULT GETDATE()
-)
-CREATE CLUSTERED INDEX IndexLapIdZoneNumber ON dbo.Zone (LapId, ZoneNumber)
+CREATE CLUSTERED INDEX IndexEventIdSectorNumber ON dbo.TrackMap (EventId, SectorNumber)
 
 
 DROP TABLE IF EXISTS dbo.CarDataNorms

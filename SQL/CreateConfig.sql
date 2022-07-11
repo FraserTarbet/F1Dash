@@ -1,4 +1,4 @@
-USE F1Dash
+USE F1DashStreamline
 
 
 DROP TABLE IF EXISTS dbo.Config_App
