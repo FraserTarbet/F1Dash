@@ -345,32 +345,20 @@ def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, for
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 0)
 
-        drivers = list(pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_SessionDrivers @SessionId = {sessionId}", sqlalchemy_engine)["RacingNumber"])
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_UpdateTelemetryTimes @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Merge_UpdateTelemetryTimes for sessionId {sessionId}")
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_LapData @SessionId=?", int(sessionId))
         data_logging(pyodbc_connection, f"Ran Merge_LapData for sessionId {sessionId}")
 
-        data_logging(pyodbc_connection, f"Starting Merge_Telemetry for drivers in SessionId {sessionId}")
-        for i, driver in enumerate(drivers):
-            cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Telemetry @SessionId=?, @Driver=?", int(sessionId), int(driver))
-            data_logging(pyodbc_connection, f"Ran Merge_Telemetry for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarData @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Merge_CarData for sessionId {sessionId}")
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_TrackMap @EventId=?", int(eventId))
         data_logging(pyodbc_connection, f"Ran Merge_TrackMap for SessionId {sessionId}")
 
-        data_logging(pyodbc_connection, f"Starting Update_TelemetryTrackMapping for SessionId {sessionId}")
-        for i, driver in enumerate(drivers):
-            cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_TelemetryTrackMapping @SessionId=?, @Driver=?", int(sessionId), int(driver))
-            data_logging(pyodbc_connection, f"Ran Update_TelemetryTrackMapping for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
-
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarDataNorms @SessionId=?", int(sessionId))
         data_logging(pyodbc_connection, f"Ran Merge_CarDataNorms for SessionId {sessionId}")
-
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Zone @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Merge_Zone for SessionId {sessionId}")
-
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_ZoneSenseCheck @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Update_ZoneSenseCheck for SessionId {sessionId}")
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
         data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
