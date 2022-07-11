@@ -180,26 +180,15 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         # Sector
         sector_frames = []
         for i in range(1, 4):
-            sector_frame = lap_data[["id", "Sector" + str(i) + "Time", "Sector" + str(i) + "SessionTime"]][(~lap_data["Sector" + str(i) + "Time"].isnull())]
+            sector_frame = lap_data[["id", "Driver", "Sector" + str(i) + "Time", "Sector" + str(i) + "SessionTime"]][(~lap_data["Sector" + str(i) + "Time"].isnull())]
             if len(sector_frame) == 0: continue
             sector_frame.rename(columns={"id": "LapId", "Sector" + str(i) + "Time": "SectorTime", "Sector" + str(i) + "SessionTime": "SectorSessionTime"}, inplace=True)
             sector_frame["SectorNumber"] = i
             sector_frames.append(sector_frame)
 
         sectors = pd.concat(sector_frames)
+        sectors["SessionId"] = session["SessionId"]
         sectors.sort_values("LapId", inplace=True)
-
-        # Speed trap
-        speed_trap_frames = []
-        for i in ["I1", "I2", "FL", "ST"]:
-            speed_trap_frame = lap_data[["id", "Speed" + i]][(~lap_data["Speed" + i].isnull()) & (~lap_data["NumberOfLaps"].isnull())]
-            if len(speed_trap_frame) == 0: continue
-            speed_trap_frame.rename(columns={"id": "LapId", "Speed" + i: "Speed"}, inplace=True)
-            speed_trap_frame["SpeedTrapPoint"] = i
-            speed_trap_frames.append(speed_trap_frame)
-
-        speed_traps = pd.concat(speed_trap_frames)
-        speed_traps.sort_values("LapId", inplace=True)
 
         # Timing data
         timing_data["SessionId"] = session["SessionId"]
@@ -252,11 +241,11 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
 
         # Compare row counts to SQL
         existing_counts = pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_TelemetryRowCounts @SessionId = {session['SessionId']}", sqlalchemy_engine)
-        existing_total =  existing_counts["Laps"][0] + existing_counts["Sectors"][0] + existing_counts["SpeedTraps"][0] \
+        existing_total =  existing_counts["Laps"][0] + existing_counts["Sectors"][0] \
             + existing_counts["TimingData"][0] + existing_counts["CarData"][0] + existing_counts["PositionData"][0] \
             + existing_counts["TrackStatus"][0] + existing_counts["SessionStatus"][0] + existing_counts["DriverInfo"][0] \
             + existing_counts["WeatherData"][0]
-        new_total = len(laps) + len(sectors) + len(speed_traps) + len(timing_data) + len(car_data) + len(position_data) \
+        new_total = len(laps) + len(sectors) + len(timing_data) + len(car_data) + len(position_data) \
             + len(track_status) + len(session_status) + len(driver_info) + len(weather_data)
 
         if new_total <= existing_total and force_reload == False:
@@ -274,7 +263,6 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
             for dataset in [
                 (laps, "Lap"),
                 (sectors, "Sector"),
-                (speed_traps, "SpeedTrap"),
                 (timing_data, "TimingData"),
                 (car_data, "CarData"),
                 (position_data, "PositionData"),

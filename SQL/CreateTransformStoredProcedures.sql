@@ -350,6 +350,120 @@ END
 GO
 
 
+
+DROP PROCEDURE IF EXISTS dbo.Merge_CarData
+GO
+CREATE PROCEDURE dbo.Merge_CarData @SessionId INT
+AS
+BEGIN
+
+	/*
+		Create a clean dataset of car telemetry, with lap and sector foreign keys
+	*/
+
+	-- Delete any existing records for this session
+	DELETE
+	FROM dbo.MergedCarData
+	WHERE SessionId = @SessionId
+
+
+	-- Merge raw car data with laps/sectors, insert into dbo.MergedCarData
+	INSERT INTO dbo.MergedCarData(
+		SessionId
+		,Driver
+		,LapId
+		,SectorNumber
+		,[Time]
+		,RPM
+		,Speed
+		,Gear
+		,Throttle
+		,Brake
+		,DRS
+	)
+	SELECT SessionId
+		,Driver
+		,LapId
+		,SectorNumber
+		,[Time]
+		,RPM
+		,Speed
+		,Gear
+		,Throttle
+		,Brake
+		,DRS
+
+	FROM (
+
+		SELECT L.SessionId
+			,L.Driver
+			,L.[Time]
+			,L.LapId
+			,L.RPM
+			,L.Speed
+			,L.Gear
+			,L.Throttle
+			,L.Brake
+			,L.DRS
+			,S.SectorNumber
+			,ROW_NUMBER() OVER(PARTITION BY L.LapId, L.[Time] ORDER BY S.SectorNumber ASC) AS SRN
+
+		FROM (
+			SELECT T.SessionId
+				,T.Driver
+				,L.LapId
+				,T.[Time]
+				,T.RPM
+				,T.Speed
+				,T.Gear
+				,T.Throttle
+				,T.Brake
+				,T.DRS
+				,T.[Time] - L.TimeStart AS LapTimeCumulative
+
+			FROM (
+				SELECT *
+
+				FROM dbo.CarData
+
+				WHERE SessionId = @SessionId
+			) AS T
+
+			INNER JOIN (
+				SELECT Driver
+					,LapId
+					,TimeStart
+					,TimeEnd
+
+				FROM dbo.MergedLapData
+
+				WHERE SessionId = @SessionId
+			) AS L
+			ON T.Driver = L.Driver
+			AND T.[Time] >= L.TimeStart
+			AND T.[Time] < L.TimeEnd
+		) AS L
+
+		INNER JOIN (
+			SELECT LapId
+				,SectorNumber
+				,SUM(SectorTime) OVER(PARTITION BY LapId ORDER BY SectorNumber ASC) AS SectorTimeCumulative
+
+			FROM dbo.Sector
+
+			WHERE SessionId = 475
+		) AS S
+		ON L.LapId = S.LapId
+		AND L.LapTimeCumulative < S.SectorTimeCumulative
+
+	) AS M
+
+	WHERE SRN = 1
+
+END
+GO
+
+
 DROP PROCEDURE IF EXISTS dbo.Merge_CarDataNorms
 GO
 CREATE PROCEDURE dbo.Merge_CarDataNorms @SessionId INT
@@ -381,9 +495,10 @@ BEGIN
 		,MIN(T.Throttle) AS ThrottleMin
 		,MAX(T.Throttle) AS ThrottleMax
 
-	FROM dbo.CarData AS T
+	FROM dbo.MergedCarData AS T
 
 	WHERE T.SessionId = @SessionId
 
 END
 GO
+

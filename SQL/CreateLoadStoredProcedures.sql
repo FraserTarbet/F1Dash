@@ -222,7 +222,6 @@ BEGIN
 	SELECT S.id AS SessionId
 		,COALESCE(Lap.Records, 0) AS Laps
 		,COALESCE(Sector.Records, 0) AS Sectors
-		,COALESCE(SpeedTrap.Records, 0) AS SpeedTraps
 		,COALESCE(TimingData.Records, 0) AS TimingData
 		,COALESCE(CarData.Records, 0) AS CarData
 		,COALESCE(PositionData.Records, 0) AS PositionData
@@ -236,25 +235,8 @@ BEGIN
 	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.Lap WHERE SessionId = @SessionId GROUP BY SessionId) AS Lap
 	ON S.id = Lap.SessionId
 
-	LEFT JOIN (
-		SELECT L.SessionId, COUNT(S.id) AS Records 
-		FROM dbo.Lap AS L
-		INNER JOIN dbo.Sector AS S
-		ON L.id = S.LapId
-		WHERE SessionId = @SessionId
-		GROUP BY L.SessionId
-	) AS Sector
+	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.Sector WHERE SessionId = @SessionId GROUP BY SessionId) AS Sector
 	ON S.id = Sector.SessionId
-
-	LEFT JOIN (
-		SELECT L.SessionId, COUNT(T.id) AS Records 
-		FROM dbo.Lap AS L
-		INNER JOIN dbo.SpeedTrap AS T
-		ON L.id = T.LapId
-		WHERE SessionId = @SessionId
-		GROUP BY L.SessionId
-	) AS SpeedTrap
-	ON S.id = SpeedTrap.SessionId
 
 	LEFT JOIN (SELECT SessionId, COUNT(*) AS Records FROM dbo.TimingData WHERE SessionId = @SessionId GROUP BY SessionId) AS TimingData
 	ON S.id = TimingData.SessionId
@@ -288,11 +270,6 @@ CREATE PROCEDURE dbo.Delete_Telemetry @SessionId INT
 AS
 BEGIN
 	DELETE S FROM dbo.Sector AS S
-	INNER JOIN dbo.Lap AS L
-	ON S.LapId = L.id
-	WHERE L.SessionId = @SessionId;
-
-	DELETE S FROM dbo.SpeedTrap AS S
 	INNER JOIN dbo.Lap AS L
 	ON S.LapId = L.id
 	WHERE L.SessionId = @SessionId;
@@ -472,7 +449,7 @@ BEGIN
 			,L.PitInTime
 			,L.PitOutTime
 
-		HAVING COUNT(S.id) = 2
+		HAVING COUNT(S.SectorNumber) = 2
 
 	) AS A
 
