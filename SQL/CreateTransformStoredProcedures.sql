@@ -453,7 +453,7 @@ BEGIN
 
 			FROM dbo.Sector
 
-			WHERE SessionId = 475
+			WHERE SessionId = @SessionId
 		) AS S
 		ON L.LapId = S.LapId
 		AND L.LapTimeCumulative < S.SectorTimeCumulative
