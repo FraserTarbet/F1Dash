@@ -226,14 +226,28 @@ BEGIN
 	/*
 		Use position data to draw a rough picture of racing line.
 		Use data from first session of event so that comparisons can be made between sessions at same event.
-		Should be possible to cut track into braking zones/straights.
-		Aggregating all clean laps might build a better picture, but for now just base on fastest (reasonable to assume the driver did well).
-		Should also be possible to crudely identify sectors using sector time data from fastest lap.
+		Should also be possible to identify sectors using sector time data from fastest lap.
 	*/
 
 	DECLARE @SessionId INT
-		,@RollingWindow INT = 5 -- Specifies size of rolling windows (n preceding and n following)
-		,@cmd NVARCHAR(MAX)
+		,@ExistingRowCount INT
+		,@LapId INT
+		,@Driver INT
+		,@TimeStart FLOAT
+		,@TimeEnd FLOAT
+
+	-- If a track map already exists for this event, exit this procedure
+	SET @ExistingRowCount = (
+		SELECT COUNT(*)
+		FROM dbo.TrackMap
+		WHERE EventId = @EventId
+	)
+
+	IF @ExistingRowCount > 0
+	BEGIN
+		RETURN
+	END
+
 
 	-- Get a clean lap of samples from fastest lap in first session of event that has at least one clean lap
 	-- Split samples into sectors at same time
@@ -264,7 +278,7 @@ BEGIN
 		WHERE RN = 1
 	)
 
-
+	-- Get lap details
 	;WITH O AS (
 		SELECT *
 			,ROW_NUMBER() OVER(ORDER BY LapTime ASC) AS RN
@@ -276,195 +290,61 @@ BEGIN
 		AND CleanLap = 1
 		AND IsPersonalBest = 1
 	)
-	,Raw AS (
-		SELECT O.LapId
-			,ROW_NUMBER() OVER(ORDER BY [Time]) AS SampleId
-			,[Time]
-			,X
-			,Y
-			,Z
-			,Gear
-			,Throttle
-			,Brake
-			,[Time] - O.TimeStart AS LapTimeCumulative
-			,O.LapTime
+	SELECT @LapId = LapId
+		,@Driver = Driver
+		,@TimeStart = TimeStart
+		,@TimeEnd = TimeEnd
 
-		FROM O
+	FROM O
 
-		INNER JOIN dbo.MergedTelemetry AS T
-		ON O.LapId = T.LapId
-
-		WHERE O.RN = 1
-		AND T.[Source] = 'pos'
-	)
-	,S AS (
-		SELECT R.*
-			,S.SectorTimeCumulative
-			,S.SectorNumber
-			,ROW_NUMBER() OVER(PARTITION BY R.SampleId ORDER BY S.SectorTimeCumulative ASC) AS RNSector
-
-		FROM Raw AS R
-
-		LEFT JOIN (
-			SELECT LapId
-				,SectorNumber
-				,SUM(SectorTime) OVER(PARTITION BY LapId ORDER BY SectorNumber ASC) AS SectorTimeCumulative
-
-			FROM dbo.Sector
-		) AS S
-		ON R.LapId = S.LapId
-		AND R.LapTimeCumulative < S.SectorTimeCumulative
-	)
-	SELECT LapId
-		,COALESCE(SectorNumber, 3) AS SectorNumber
-		,SampleId
-		,[Time]
-		,X
-		,Y
-		,Z
-		,Gear
-		,Throttle
-		,Brake
-
-	INTO #Samples
-
-	FROM S
-
-	WHERE RNSector = 1
+	WHERE RN = 1
 
 
-	-- Group points based on braking and gears
-	-- Use rolling averages to smooth out any choppy braking and throttle application
-	-- Forced to use dynamic SQL to inject @RollingWindow in ROWS BETWEEN clauses...
-
-	CREATE TABLE #RollingSamples(
-		LapId INT
-		,SectorNumber INT
-		,SampleId INT
-		,[Time] FLOAT
-		,X INT
-		,Y INT
-		,Z INT
-		,Gear INT
-		,Throttle INT
-		,Brake BIT
-		,AvgGear FLOAT
-		,AvgThrottle INT
-		,AvgBrake FLOAT
-	)
-
-	SET @cmd = '
-		INSERT INTO #RollingSamples
+	-- Link samples to sectors and insert them into dbo.TrackMap
+	;WITH P AS(
 		SELECT *
-			,AVG(CAST(Gear AS FLOAT)) OVER(ORDER BY SampleId ROWS BETWEEN ' + CAST(@RollingWindow AS VARCHAR(MAX)) + ' PRECEDING AND ' + CAST(@RollingWindow AS VARCHAR(MAX)) + ' FOLLOWING) AS AvgGear
-			,AVG(Throttle) OVER(ORDER BY SampleId ROWS BETWEEN ' + CAST(@RollingWindow AS VARCHAR(MAX)) + ' PRECEDING AND ' + CAST(@RollingWindow AS VARCHAR(MAX)) + ' FOLLOWING) AS AvgThrottle
-			,AVG(CAST(Brake AS FLOAT)) OVER(ORDER BY SampleId ROWS BETWEEN ' + CAST(@RollingWindow AS VARCHAR(MAX)) + ' PRECEDING AND ' + CAST(@RollingWindow AS VARCHAR(MAX)) + ' FOLLOWING) AS AvgBrake
+			,[Time] - @TimeStart AS LapTimeCumulative
 
-		FROM #Samples
-	'
+		FROM dbo.PositionData AS P
 
-	EXEC(@cmd)
+		WHERE SessionId = @SessionId
+		AND Driver = @Driver
+		AND [Time] >= @TimeStart
+		AND [Time] < @TimeEnd
+	)
+	,S AS(
+		SELECT SectorNumber
+			,SUM(SectorTime) OVER(ORDER BY SectorNumber ASC) AS SectorTimeCumulative
 
-	-- InputCategory = 0: Braking, 1: Gear < 5, 2: Gear >= 5
+		FROM dbo.Sector
 
-	;WITH Inputs AS (
+		WHERE LapId = @LapId
+	)
+	,J AS(
 		SELECT *
-			,CASE
-				WHEN AvgBrake > 0.2 THEN 0
-				WHEN AvgGear < 5.0 THEN 1
-				WHEN AvgGear >= 5.0 THEN 2
-			END AS InputCategory
+			,ROW_NUMBER() OVER(PARTITION BY P.[Time] ORDER BY S.SectorNumber ASC) AS RN
 
-		FROM #RollingSamples
+		FROM P
+
+		INNER JOIN S
+		ON P.LapTimeCumulative < S.SectorTimeCumulative
 	)
-	,GroupStart AS (
-		SELECT *
-			,CASE WHEN LAG(InputCategory, 1, -1) OVER(ORDER BY SampleId ASC) <> InputCategory THEN SampleId ELSE NULL END AS GroupStart
-		FROM Inputs
-	)
-	,GroupFill AS (
-		SELECT *
-			,MAX(GroupStart) OVER(ORDER BY SampleId ASC) AS GroupStartId
-		FROM GroupStart
-	)
-	,Zones AS (
-		SELECT A.LapId
-			,A.SectorNumber
-			,A.SampleId
-			,A.X
-			,A.Y
-			,A.Z
-			,A.InputCategory
-			,B.GroupId AS ZoneNumber
-
-		FROM GroupFill AS A
-
-		LEFT JOIN (
-			SELECT GroupStartId
-				,ROW_NUMBER() OVER(ORDER BY GroupStartId ASC) AS GroupId
-
-			FROM (
-				-- Don't give Id to tiny zones
-				SELECT GroupStartId 
-				
-				FROM GroupFill 
-				
-				GROUP BY GroupStartId 
-				
-				HAVING COUNT(*) >= 5
-			) AS S
-		) AS B
-		ON A.GroupStartId = B.GroupStartId
-	)
-	-- Fill in any NULL ZoneNumber from tiny zones
-	SELECT LapId
-		,SectorNumber
-		,SampleId
-		,X
-		,Y
-		,Z
-		,InputCategory
-		,CASE
-			WHEN ZoneNumber IS NULL AND LEAD(ZoneNumber, 1, NULL) OVER(ORDER BY SampleId ASC) IS NULL THEN MAX(ZoneNumber) OVER(ORDER BY SampleId ASC)
-			WHEN ZoneNumber IS NULL THEN MIN(ZoneNumber) OVER(ORDER BY SampleId DESC)
-			ELSE ZoneNumber
-		END AS ZoneNumber
-
-	INTO #Records
-	FROM Zones
-
-
-
-	-- Delete any existing records for this @EventId
-	DELETE
-	FROM dbo.TrackMap
-	WHERE EventId = @EventId
-
-
-	-- Insert new records
 	INSERT INTO dbo.TrackMap(
 		EventId
-		,SampleId
 		,X
 		,Y
 		,Z
 		,SectorNumber
-		,ZoneNumber
-		,ZoneInputCategory
 	)
 	SELECT @EventId
-		,SampleId
 		,X
 		,Y
 		,Z
 		,SectorNumber
-		,ZoneNumber
-		,InputCategory AS ZoneInputCategory
+			
+	FROM J
 
-	FROM #Records
-
-
-	DROP TABLE #Samples, #RollingSamples, #Records
+	WHERE RN = 1
 
 END
 GO

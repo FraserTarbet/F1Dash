@@ -246,7 +246,6 @@ CREATE NONCLUSTERED INDEX IndexDriver ON dbo.MergedLapData (Driver)
 DROP TABLE IF EXISTS dbo.TrackMap
 CREATE TABLE dbo.TrackMap(
 	EventId INT
-	,SampleId INT
 	,X INT
 	,Y INT
 	,Z INT
