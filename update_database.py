@@ -73,7 +73,14 @@ def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False)
     sessions.to_sql("Session", sqlalchemy_engine, if_exists="append", index=False)
 
 
-def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None, force_reload=False): 
+def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None, force_reload=False):
+
+    cursor = pyodbc_connection["cursor"]
+
+    # Clean up any old raw telemetry data
+    cursor.execute("SET NOCOUNT ON; EXEC dbo.Cleanup_RawTelemetry")
+    data_logging(pyodbc_connection, f"Ran Cleanup_RawTelemetry")
+     
     # Get API strings
     if force_eventId is not None:
         sql = f"EXEC dbo.Get_SessionsToLoad @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
@@ -86,7 +93,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         data_logging(pyodbc_connection, "No sessions to update")
         return
 
-    cursor = pyodbc_connection["cursor"]
+    
 
     sessions_data = []
     for i in range(0, len(sessions_frame)):

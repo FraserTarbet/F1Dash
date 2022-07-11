@@ -470,3 +470,41 @@ BEGIN
 	WHERE id = @SessionId
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Cleanup_RawTelemetry
+GO
+CREATE PROCEDURE dbo.Cleanup_RawTelemetry
+AS
+BEGIN
+	
+	/*
+		Once the raw telemetry data has been used for transforms, it can be deleted from the database.
+		Will prevent the raw tables from getting too large and slowing down loads later on.
+		Don't delete immediately, in case there's something that needs investigating. Only delete once the next event starts being loaded.
+	*/
+
+	DECLARE @CurrentEvent INT
+	DECLARE @SessionsToDelete TABLE(
+			id INT
+		)
+
+	SET @CurrentEvent = (SELECT MAX(EventId) FROM dbo.Session WHERE LoadStatus = 1)
+
+
+	INSERT INTO @SessionsToDelete 
+
+	SELECT id
+
+	FROM dbo.Session
+
+	WHERE EventId < @CurrentEvent
+	AND LoadStatus = 1
+	AND TransformStatus = 1
+
+
+	DELETE FROM dbo.CarData WHERE SessionId IN (SELECT id FROM @SessionsToDelete)
+	DELETE FROM dbo.PositionData WHERE SessionId IN (SELECT id FROM @SessionsToDelete)
+
+END
+GO
