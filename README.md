@@ -45,11 +45,7 @@ There are three main components to the project, and I'll briefly describe each: 
 The FastF1 API is called on a schedule to check for any new data at source. Managed by a combination of python script and SQL stored procedures, the new data is loaded into SQL Server tables until it's confirmed to be complete, at which point the schedule marks the session as fully loaded and will not check again.
 
 ### Transforms
-The app requires some heavy data transformations that would be impractical within python at runtime. Instead, python calls a series of stored procedures after a session has been confirmed as fully loaded. Broadly, these transforms accomplish the following:
-
-1. Raw lap data is enriched with tyre compound information, linked to weather, individual stints are identified, and laps are identified as being clean/unclean.
-2. As received, the raw telemetry data is split into two time series datasets: position data (coordinates of where the car is on track at a given time) and car data (speed, gear, throttle application, etc.). These datasets do not align, and hence some interpolation is required to calculate, for instance, what gear a car was *probably* in at a given position, or *approximately* where a driver started to apply the brakes (see caveats section for more detail on potential telemetry pitfalls). The datasets are merged into a single table, and each row of data is related to a lap.
-3. The raw data does not contain any information on the track layout, so part of the transformation process involves creating a picture of the track based on telemetry. Using the official sector times, it's possible to divide this into sectors.
+The app requires some heavy data transformations that would be impractical within python at runtime. Instead, python calls a series of stored procedures after a session has been confirmed as fully loaded. These functions create clean datasets from the raw data, creating a relational model, as well as generating a track layout from car position data. *Note: Previous versions included a lot of processing to create track 'zones' from the telemetry data, with the intention of giving a more grandular analysis of performance around a lap. For accuracy and performance (particularly on Azure) reasons, this has been stripped out of the current version for the time being, but may return in an improved form later.*
 
 ### Dash app
 Dash apps (which are built on Flask) are single threaded, but two additional looping threads are created on startup:
@@ -76,9 +72,7 @@ If I were to start this project from scratch, I would probably split it into two
 
 ## Caveats
 
-As touched on above, the telemetry data has some issues and hence anything relying upon it should be approached with caution. Interpolation of the position and car datasets mean there's an inherent inaccuracy, and the source samples themselves are already only taken at roughly 4Hz plus/minus jitter. This means that, for example, the position at which gear changes take place will be quite inaccurate when the car is travelling at high speeds.
-
-Part of the transformation process creates track 'zones' based on lap telemetry data. These are based on driver inputs, and generally represent areas of braking, acceleration and straights. Particular caution should be applied to these zone times. Whereas sector times come from the official source, zone times are essentially based on when a car is estimated to have passed a certain point on track, based on the times/distance at which they were sampled either side of that point. I've made an effort to remove obviously erroneous data caused by lags in the source data or incorrect interpolations, but it's impossible to do this completely accurately. For the time being at least, I have removed this functionality from the dashboard itself, but may revisit it in future if I can improve its accuracy/reliability.
+I cannot vouch for the complete accuracy of the telemetry data used by this app. I have, for example, seen gaps in the input telemetry lasting a significant portion of a lap. The raw timing data appears to suffer from occasional missing data as well, such as 'unknown' tyre compounds that appear in some sessions.
 
 It should also be noted that unclean laps (i.e. a lap unrepresentative of a driver's pace) cannot be identified completely reliably by their very nature. It's simple enough to remove in/out laps and laps under safety cars, etc. However, in order to filter out warm-up laps it was necessary to add a time threshold - it's possible that a particularly hot warm-up lap could slip through the net, and vice versa. In future, I may amend this logic to look for other clues, such as a driver not being at full throttle on straights.
 
