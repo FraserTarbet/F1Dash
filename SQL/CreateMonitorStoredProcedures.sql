@@ -62,3 +62,43 @@ BEGIN
 
 END
 GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Monitor_RecentDataLogs
+GO
+CREATE PROCEDURE dbo.Monitor_RecentDataLogs
+AS
+BEGIN
+
+	/*
+		Get recent data logs
+	*/
+
+	SELECT TOP 200 *
+
+	FROM dbo.Log_Data
+
+	ORDER BY LogDateTime DESC
+
+END
+GO
+
+
+DROP PROCEDURE IF EXISTS dbo.Monitor_RecentAppLogs
+GO
+CREATE PROCEDURE dbo.Monitor_RecentAppLogs
+AS
+BEGIN
+
+	/*
+		Get recent app logs
+	*/
+
+	SELECT TOP 200 *
+
+	FROM dbo.Log_App
+
+	ORDER BY LogDateTime DESC
+
+END
+GO
