@@ -285,6 +285,8 @@ def session_selector_refresh(panel_open, event_select_value, events_and_sessions
 # Request session datasets
 @dash_app.callback(
     Output("selected_session", "data"),
+    Output("lap_plot", "selectedData"),
+    Output("track_map", "selectedData"),
     Input("load_button", "n_clicks"),
     State("event_select", "value"),
     State("session_select", "value"),
@@ -309,9 +311,9 @@ def request_datasets(click, event_id, session_name, selected_session_state, clie
         cache_files_deleted = file_store.delete_files()
         if cache_files_deleted is not None:
             read_database.app_logging(str(client_info), "delete_files", f"{str(cache_files_deleted)} cache files deleted")
-        return json.dumps(selected_session)
+        return json.dumps(selected_session), None, None
     else:
-        return no_update
+        return no_update, no_update, no_update
 
 
 # Load session datasets to store
@@ -336,8 +338,7 @@ def load_datasets(selected_session):
         event_id = selected_session["EventId"]
         session_name = selected_session["SessionName"]
         
-        use_test_data = True if config["ForceTestData"] == "1" else False
-        data_dict = read_database.read_session_data(event_id, session_name, use_test_data)
+        data_dict = read_database.read_session_data(event_id, session_name)
         
         return (
             data_dict
@@ -736,4 +737,4 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
         
 if __name__ == "__main__":
     # Azure host will not run this
-    dash_app.run_server(debug=True)
+    dash_app.run_server(debug=False)

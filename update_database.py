@@ -73,7 +73,14 @@ def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False)
     sessions.to_sql("Session", sqlalchemy_engine, if_exists="append", index=False)
 
 
-def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None, force_reload=False): 
+def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None, force_reload=False):
+
+    cursor = pyodbc_connection["cursor"]
+
+    # Clean up any old raw telemetry data
+    cursor.execute("SET NOCOUNT ON; EXEC dbo.Cleanup_RawTelemetry")
+    data_logging(pyodbc_connection, f"Ran Cleanup_RawTelemetry")
+     
     # Get API strings
     if force_eventId is not None:
         sql = f"EXEC dbo.Get_SessionsToLoad @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
@@ -86,7 +93,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         data_logging(pyodbc_connection, "No sessions to update")
         return
 
-    cursor = pyodbc_connection["cursor"]
+    
 
     sessions_data = []
     for i in range(0, len(sessions_frame)):
@@ -180,26 +187,15 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         # Sector
         sector_frames = []
         for i in range(1, 4):
-            sector_frame = lap_data[["id", "Sector" + str(i) + "Time", "Sector" + str(i) + "SessionTime"]][(~lap_data["Sector" + str(i) + "Time"].isnull())]
+            sector_frame = lap_data[["id", "Driver", "Sector" + str(i) + "Time", "Sector" + str(i) + "SessionTime"]][(~lap_data["Sector" + str(i) + "Time"].isnull())]
             if len(sector_frame) == 0: continue
             sector_frame.rename(columns={"id": "LapId", "Sector" + str(i) + "Time": "SectorTime", "Sector" + str(i) + "SessionTime": "SectorSessionTime"}, inplace=True)
             sector_frame["SectorNumber"] = i
             sector_frames.append(sector_frame)
 
         sectors = pd.concat(sector_frames)
+        sectors["SessionId"] = session["SessionId"]
         sectors.sort_values("LapId", inplace=True)
-
-        # Speed trap
-        speed_trap_frames = []
-        for i in ["I1", "I2", "FL", "ST"]:
-            speed_trap_frame = lap_data[["id", "Speed" + i]][(~lap_data["Speed" + i].isnull()) & (~lap_data["NumberOfLaps"].isnull())]
-            if len(speed_trap_frame) == 0: continue
-            speed_trap_frame.rename(columns={"id": "LapId", "Speed" + i: "Speed"}, inplace=True)
-            speed_trap_frame["SpeedTrapPoint"] = i
-            speed_trap_frames.append(speed_trap_frame)
-
-        speed_traps = pd.concat(speed_trap_frames)
-        speed_traps.sort_values("LapId", inplace=True)
 
         # Timing data
         timing_data["SessionId"] = session["SessionId"]
@@ -252,11 +248,11 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
 
         # Compare row counts to SQL
         existing_counts = pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_TelemetryRowCounts @SessionId = {session['SessionId']}", sqlalchemy_engine)
-        existing_total =  existing_counts["Laps"][0] + existing_counts["Sectors"][0] + existing_counts["SpeedTraps"][0] \
+        existing_total =  existing_counts["Laps"][0] + existing_counts["Sectors"][0] \
             + existing_counts["TimingData"][0] + existing_counts["CarData"][0] + existing_counts["PositionData"][0] \
             + existing_counts["TrackStatus"][0] + existing_counts["SessionStatus"][0] + existing_counts["DriverInfo"][0] \
             + existing_counts["WeatherData"][0]
-        new_total = len(laps) + len(sectors) + len(speed_traps) + len(timing_data) + len(car_data) + len(position_data) \
+        new_total = len(laps) + len(sectors) + len(timing_data) + len(car_data) + len(position_data) \
             + len(track_status) + len(session_status) + len(driver_info) + len(weather_data)
 
         if new_total <= existing_total and force_reload == False:
@@ -274,7 +270,6 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
             for dataset in [
                 (laps, "Lap"),
                 (sectors, "Sector"),
-                (speed_traps, "SpeedTrap"),
                 (timing_data, "TimingData"),
                 (car_data, "CarData"),
                 (position_data, "PositionData"),
@@ -357,32 +352,20 @@ def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, for
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 0)
 
-        drivers = list(pd.read_sql_query(f"SET NOCOUNT ON; EXEC dbo.Get_SessionDrivers @SessionId = {sessionId}", sqlalchemy_engine)["RacingNumber"])
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_UpdateTelemetryTimes @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Merge_UpdateTelemetryTimes for sessionId {sessionId}")
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_LapData @SessionId=?", int(sessionId))
         data_logging(pyodbc_connection, f"Ran Merge_LapData for sessionId {sessionId}")
 
-        data_logging(pyodbc_connection, f"Starting Merge_Telemetry for drivers in SessionId {sessionId}")
-        for i, driver in enumerate(drivers):
-            cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Telemetry @SessionId=?, @Driver=?", int(sessionId), int(driver))
-            data_logging(pyodbc_connection, f"Ran Merge_Telemetry for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
+        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarData @SessionId=?", int(sessionId))
+        data_logging(pyodbc_connection, f"Ran Merge_CarData for sessionId {sessionId}")
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_TrackMap @EventId=?", int(eventId))
         data_logging(pyodbc_connection, f"Ran Merge_TrackMap for SessionId {sessionId}")
 
-        data_logging(pyodbc_connection, f"Starting Update_TelemetryTrackMapping for SessionId {sessionId}")
-        for i, driver in enumerate(drivers):
-            cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_TelemetryTrackMapping @SessionId=?, @Driver=?", int(sessionId), int(driver))
-            data_logging(pyodbc_connection, f"Ran Update_TelemetryTrackMapping for SessionId {sessionId}, Driver {driver} ({i+1} of {len(drivers)})")
-
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarDataNorms @SessionId=?", int(sessionId))
         data_logging(pyodbc_connection, f"Ran Merge_CarDataNorms for SessionId {sessionId}")
-
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_Zone @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Merge_Zone for SessionId {sessionId}")
-
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_ZoneSenseCheck @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Update_ZoneSenseCheck for SessionId {sessionId}")
 
         cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
         data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
