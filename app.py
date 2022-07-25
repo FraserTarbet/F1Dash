@@ -287,6 +287,7 @@ def session_selector_refresh(panel_open, event_select_value, events_and_sessions
     Output("selected_session", "data"),
     Output("lap_plot", "selectedData"),
     Output("track_map", "selectedData"),
+    Output("conditions_plot", "selectedData"),
     Input("load_button", "n_clicks"),
     State("event_select", "value"),
     State("session_select", "value"),
@@ -311,9 +312,9 @@ def request_datasets(click, event_id, session_name, selected_session_state, clie
         cache_files_deleted = file_store.delete_files()
         if cache_files_deleted is not None:
             read_database.app_logging(str(client_info), "delete_files", f"{str(cache_files_deleted)} cache files deleted")
-        return json.dumps(selected_session), None, None
+        return json.dumps(selected_session), None, None, None
     else:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
 
 
 # Load session datasets to store
@@ -386,23 +387,16 @@ def refresh_heading(datasets, events_and_sessions, selected_session):
 
 
 # Open timeline
-# Force conditions_plot sizing here? Keeps expanding unpredictably
 @dash_app.callback(
     Output("conditions_panel", "is_open"),
-    #Output("conditions_plot", "style"),
     Input("open_conditions_button", "n_clicks"),
     State("client_info", "data")
 )
 def open_conditions_panel(click, client_info):
     if click is not None:
-        return True
-        #    {"height": 250}
-        
+        return True        
     else:
-        return False
-        #    {}
-        
-
+        return False   
 
 
 ### Callback for each dropdown filter
@@ -723,7 +717,8 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
     if datasets is None:
         return visuals.build_conditions_plot(datasets, client_info)
     else:
-        if callback_context.triggered[0]["prop_id"].split(".")[0] == "datasets":
+        calling_props = [x["prop_id"].split(".")[0] for x in callback_context.triggered]
+        if "datasets" in calling_props:
             return visuals.build_conditions_plot(datasets, client_info)
         else:
             filter = filter_dict_from_inputs({
