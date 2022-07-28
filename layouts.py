@@ -335,8 +335,8 @@ layout_desktop = [
                 children=[
                     dbc.Row(
                         [
-                            dbc.Col(dbc.Button("Filters", id="open_parameters_button", style={"margin-left": "10px"}), xs=5),
-                            dbc.Col(dbc.Button(id="open_conditions_button", children="Open timeline"), xs=2),
+                            dbc.Col(dbc.Button("Open Filters", id="open_parameters_button", style={"margin-left": "10px"}), xs=5),
+                            dbc.Col(dbc.Button(id="open_conditions_button", children="Open Timeline"), xs=2),
                             dbc.Col(html.P(short_abstract_text), style={"font-size": "0.9rem"}, xs=5)
                         ],
                         align="start",
