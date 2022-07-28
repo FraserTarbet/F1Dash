@@ -343,6 +343,10 @@ layout_desktop = [
                         justify="start"
                     ),
                 ]
+            ),
+            html.Div(
+                children=[dbc.Button(id="clear_crossfilters_button")],
+                hidden=True
             )
         ]
     ),
@@ -390,12 +394,18 @@ layout_mobile = [
                         children=[
                             html.Div(id="upper_heading", hidden=True),
                             dbc.Row(dbc.Col(html.H1(id="lower_heading"), xs=12)),
-                            html.Hr(),
+                            html.Br(),
                             dbc.Row(
                                 [
-                                    dbc.Col(dbc.Button(id="open_parameters_button", children="Open Filters", size="sm"), xs=4),
-                                    dbc.Col(html.P(short_abstract_text, style={"font-size": "0.75rem"}), xs=8)
+                                    dbc.Col(html.P(short_abstract_text, style={"font-size": "0.75rem"}), xs=12)
                                 ]
+                            ),
+                            dbc.Row(
+                                [
+                                    dbc.Col(dbc.Button(id="open_parameters_button", children="Open Filters", size="sm"), xs=6),
+                                    dbc.Col(dbc.Button(id="clear_crossfilters_button", children="Clear Selections", size="sm", disabled=True), xs=5),
+                                ],
+                                justify="between"
                             )
                         ]
                     ),
