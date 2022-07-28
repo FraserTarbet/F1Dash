@@ -282,22 +282,29 @@ def session_selector_refresh(panel_open, event_select_value, events_and_sessions
     )
 
 
-# Request session datasets
+# Clear selected data on new session load or crossfilter clear
 @dash_app.callback(
     Output("selected_session", "data"),
     Output("lap_plot", "selectedData"),
     Output("track_map", "selectedData"),
     Output("conditions_plot", "selectedData"),
     Input("load_button", "n_clicks"),
+    Input("clear_crossfilters_button", "n_clicks"),
     State("event_select", "value"),
     State("session_select", "value"),
     State("selected_session", "data"),
     State("client_info", "data")
 )
-def request_datasets(click, event_id, session_name, selected_session_state, client_info):
-    if click is None:
+def request_datasets(load_click, clear_crossfilters_click, event_id, session_name, selected_session_state, client_info):
+
+    # Crossfilters clear
+    if callback_context.triggered[0]["prop_id"].split(".")[0] == "clear_crossfilters_button":
+        return no_update, None, None, no_update
+
+    # Session load
+    if load_click is None:
         new_request = False
-    if click is not None and selected_session_state is None:
+    if load_click is not None and selected_session_state is None:
         new_request = True
     if selected_session_state is not None:
         selected_session_state = json.loads(selected_session_state)
@@ -397,6 +404,16 @@ def open_conditions_panel(click, client_info):
         return True        
     else:
         return False   
+
+
+# Set clear crossfilters button colour
+@dash_app.callback(
+    Output("clear_crossfilters_button", "disabled"),
+    Input("lap_plot", "selectedData"),
+    Input("track_map", "selectedData")
+)
+def set_clear_filters_button(lap_plot_selection, track_map_selection):
+    return lap_plot_selection is None and track_map_selection is None
 
 
 ### Callback for each dropdown filter
@@ -732,4 +749,4 @@ def conditions_plot_refresh(datasets, conditions_plot_selection, conditions_plot
         
 if __name__ == "__main__":
     # Azure host will not run this
-    dash_app.run_server(debug=False)
+    dash_app.run_server(debug=True)
