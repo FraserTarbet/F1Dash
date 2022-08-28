@@ -91,7 +91,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
 
     if len(sessions_frame) == 0:
         data_logging(pyodbc_connection, "No sessions to update")
-        return
+        return False
 
     
 
@@ -324,53 +324,67 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
                 cursor.commit()
                 data_logging(pyodbc_connection, f"Data load at least partially complete for SessionId {session['SessionId']}")
 
+    return True
+
 
 def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None):
     # Transforms all take place using stored procedures, this script just calls and passes parameters to each
     cursor = pyodbc_connection["cursor"]
 
-    if force_eventId is not None:
-        sql = f"EXEC dbo.Get_SessionsToTransform @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
-    else:
-        sql = "EXEC dbo.Get_SessionsToTransform"
+    success = False
+    error_count = 0
 
-    sessions_frame = pd.read_sql_query("SET NOCOUNT ON; " + sql, sqlalchemy_engine)[["SessionId", "EventId"]]
-    session_dicts = []
-    for i in range(0, len(sessions_frame)):
-        session_dicts.append({
-            "SessionId": sessions_frame["SessionId"].iloc[i],
-            "EventId": sessions_frame["EventId"].iloc[i]
-        })
+    while not success and error_count < 3:
+        try:
+            if force_eventId is not None:
+                sql = f"EXEC dbo.Get_SessionsToTransform @ForceEventId = {force_eventId}, @ForceSessionId = {force_sessionId};"
+            else:
+                sql = "EXEC dbo.Get_SessionsToTransform"
 
-    if len(session_dicts) > 0:
-        data_logging(pyodbc_connection, f"Running transforms for {len(session_dicts)} sessions...")
+            sessions_frame = pd.read_sql_query("SET NOCOUNT ON; " + sql, sqlalchemy_engine)[["SessionId", "EventId"]]
+            session_dicts = []
+            for i in range(0, len(sessions_frame)):
+                session_dicts.append({
+                    "SessionId": sessions_frame["SessionId"].iloc[i],
+                    "EventId": sessions_frame["EventId"].iloc[i]
+                })
 
-    for iSession, session_dict in enumerate(session_dicts):
-        sessionId = session_dict["SessionId"]
-        eventId = session_dict["EventId"]
-        data_logging(pyodbc_connection, f"Running transforms for sessionId {sessionId}")
+            if len(session_dicts) > 0:
+                data_logging(pyodbc_connection, f"Running transforms for {len(session_dicts)} sessions...")
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 0)
+            for iSession, session_dict in enumerate(session_dicts):
+                sessionId = session_dict["SessionId"]
+                eventId = session_dict["EventId"]
+                data_logging(pyodbc_connection, f"Running transforms for sessionId {sessionId}")
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_UpdateTelemetryTimes @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Merge_UpdateTelemetryTimes for sessionId {sessionId}")
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 0)
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_LapData @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Merge_LapData for sessionId {sessionId}")
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_UpdateTelemetryTimes @SessionId=?", int(sessionId))
+                data_logging(pyodbc_connection, f"Ran Merge_UpdateTelemetryTimes for sessionId {sessionId}")
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarData @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Merge_CarData for sessionId {sessionId}")
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_LapData @SessionId=?", int(sessionId))
+                data_logging(pyodbc_connection, f"Ran Merge_LapData for sessionId {sessionId}")
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_TrackMap @EventId=?", int(eventId))
-        data_logging(pyodbc_connection, f"Ran Merge_TrackMap for SessionId {sessionId}")
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarData @SessionId=?", int(sessionId))
+                data_logging(pyodbc_connection, f"Ran Merge_CarData for sessionId {sessionId}")
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarDataNorms @SessionId=?", int(sessionId))
-        data_logging(pyodbc_connection, f"Ran Merge_CarDataNorms for SessionId {sessionId}")
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_TrackMap @EventId=?", int(eventId))
+                data_logging(pyodbc_connection, f"Ran Merge_TrackMap for SessionId {sessionId}")
 
-        cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
-        data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Merge_CarDataNorms @SessionId=?", int(sessionId))
+                data_logging(pyodbc_connection, f"Ran Merge_CarDataNorms for SessionId {sessionId}")
 
-        cursor.commit()
+                cursor.execute("SET NOCOUNT ON; EXEC dbo.Update_SessionTransformStatus @SessionId=?, @Status=?", int(sessionId), 1)
+                data_logging(pyodbc_connection, f"Completed transforms for SessionId {sessionId} ({iSession+1} of {len(session_dicts)})")
+
+                cursor.commit()
+
+        except OperationalError:
+            error_count += 1
+            data_logging(pyodbc_connection, f"Operational error during transforms; attempt {str(error_count)}")
+            time.sleep(5)
+        else:
+            success = True
 
 
 def wrapper(force_eventId=None, force_sessionId=None, force_reload=False):
@@ -378,8 +392,9 @@ def wrapper(force_eventId=None, force_sessionId=None, force_reload=False):
     pyodbc_connection = sql_connection.get_pyodbc_connection()
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
     refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId, force_reload)
+    quick_loop = load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId, force_reload)
     run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId)
     pyodbc_connection["connection"].close()
     sqlalchemy_engine.dispose()
 
+    return quick_loop
