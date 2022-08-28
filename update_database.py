@@ -187,7 +187,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         # Sector
         sector_frames = []
         for i in range(1, 4):
-            sector_frame = lap_data[["id", "Driver", "Sector" + str(i) + "Time", "Sector" + str(i) + "SessionTime"]][(~lap_data["Sector" + str(i) + "Time"].isnull())]
+            sector_frame = lap_data[["id", "Driver", "Sector" + str(i) + "Time", "Sector" + str(i) + "SessionTime"]][(~lap_data["Sector" + str(i) + "Time"].isnull()) & (lap_data["Driver"] != "")]
             if len(sector_frame) == 0: continue
             sector_frame.rename(columns={"id": "LapId", "Sector" + str(i) + "Time": "SectorTime", "Sector" + str(i) + "SessionTime": "SectorSessionTime"}, inplace=True)
             sector_frame["SectorNumber"] = i
