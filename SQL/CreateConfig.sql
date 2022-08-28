@@ -26,3 +26,4 @@ VALUES
 ,('DatabaseThreadSleepInHours', '0.5')
 ,('CacheThreadSleepInHours', '1')
 ,('ThreadMaxWakeupDelayInSeconds', '60')
+,('HoursToAttemptLoading', '6')

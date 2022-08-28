@@ -74,6 +74,13 @@ BEGIN
 
 		WHERE Parameter = 'HoursToWaitBeforeLoading'
 	)
+	,@HoursToAttemptLoading INT = (
+		SELECT CAST([Value] AS INT)
+
+		FROM dbo.Config_App
+
+		WHERE Parameter = 'HoursToAttemptLoading'
+	)
 
 	
 	SELECT S.id AS SessionId
@@ -99,7 +106,7 @@ BEGIN
 		AND (LoadStatus = 0  OR LoadStatus IS NULL)
 		AND F1ApiSupport = 1
 		AND SessionDate >= @SinceDate
-		AND AbortedLoadCount < @MaxAbortedLoads
+		AND NOT (AbortedLoadCount > @MaxAbortedLoads AND DATEDIFF(HOUR, DATEADD(HOUR, -COALESCE(O.UTCOffset, 0) + @HoursToWaitBeforeLoading, SessionDate), GETDATE()) > @HoursToAttemptLoading)
 	)
 	OR (
 		E.id = @ForceEventId
