@@ -91,7 +91,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
 
     if len(sessions_frame) == 0:
         data_logging(pyodbc_connection, "No sessions to update")
-        return
+        return False
 
     
 
@@ -324,6 +324,8 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
                 cursor.commit()
                 data_logging(pyodbc_connection, f"Data load at least partially complete for SessionId {session['SessionId']}")
 
+    return True
+
 
 def run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None):
     # Transforms all take place using stored procedures, this script just calls and passes parameters to each
@@ -378,8 +380,9 @@ def wrapper(force_eventId=None, force_sessionId=None, force_reload=False):
     pyodbc_connection = sql_connection.get_pyodbc_connection()
     sqlalchemy_engine = sql_connection.get_sqlalchemy_engine()
     refresh_schedule(pyodbc_connection, sqlalchemy_engine)
-    load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId, force_reload)
+    quick_loop = load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId, force_reload)
     run_transforms(pyodbc_connection, sqlalchemy_engine, force_eventId, force_sessionId)
     pyodbc_connection["connection"].close()
     sqlalchemy_engine.dispose()
 
+    return quick_loop
