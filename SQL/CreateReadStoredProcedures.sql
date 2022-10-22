@@ -108,8 +108,16 @@ BEGIN
 		,D.Tla
 		,D.TeamName
 		,D.TeamColour
-		,D.TeamOrder
-		,D.DriverOrder
+		,CASE 
+			WHEN @SessionName = 'Practice (all)' 
+			THEN DT.TeamDriverOrder
+			ELSE D.TeamOrder
+		END AS TeamOrder
+		,CASE
+			WHEN @SessionName = 'Practice (all)'
+			THEN DT.TeamDriverOrder
+			ELSE D.DriverOrder
+		END AS DriverOrder
 
 	FROM dbo.Session AS S
 
@@ -126,6 +134,31 @@ BEGIN
 	INNER JOIN dbo.OffsetStintNumbers(@EventId, @SessionName) AS OS
 	ON L.StintId = OS.StintId
 
+	INNER JOIN (
+		-- Force alphabetical order when combining sessions (necessary to handle drivers under multiple teams)
+		SELECT DISTINCT TeamName
+			,RacingNumber AS Driver
+			,ROW_NUMBER() OVER(ORDER BY TeamName ASC, RacingNumber ASC) AS TeamDriverOrder
+			,ROW_NUMBER() OVER(PARTITION BY TeamName, RacingNumber ORDER BY SessionId ASC) AS RN
+
+		FROM dbo.DriverInfo AS D
+
+		INNER JOIN dbo.Session AS S
+		ON D.SessionId = S.Id
+
+		INNER JOIN dbo.Event AS E
+		ON S.EventId = E.id
+
+		WHERE EventId = @EventId
+		AND (
+			SessionName = @SessionName
+			OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+		)
+	) AS DT
+	ON D.RacingNumber = DT.Driver
+	AND D.TeamName = DT.TeamName
+	AND DT.RN = 1
+
 	WHERE EventId = @EventId
 	AND (
 		SessionName = @SessionName
@@ -133,8 +166,8 @@ BEGIN
 	)
 	AND L.LapTime IS NOT NULL
 
-	ORDER BY D.TeamOrder ASC
-		,D.DriverOrder ASC
+	ORDER BY TeamOrder
+		,DriverOrder
 		,OS.OffsetStintNumber ASC
 		,LapsInStint ASC
 

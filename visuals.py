@@ -311,20 +311,21 @@ def build_lap_plot(data_dict, filters, client_info):
     tick_values = []
     tick_labels = []
     previous_driver_index_end = -0.5
-    
-    for driver in list(data["Driver"].unique()):
-        #index_min = data.index[(data["Driver"] == driver)].min()
+
+    data["DriverTeam"] = data.apply(lambda x: str(x["Driver"]) + x["TeamColour"], axis=1)
+
+    for driver_team in list(data["DriverTeam"].unique()):
         x_min = previous_driver_index_end
-        x_max = data.index[(data["Driver"] == driver)].max() + 0.5
+        x_max = data.index[(data["DriverTeam"] == driver_team)].max() + 0.5
         x_mid = int(x_min + (x_max - x_min) / 2)
         previous_driver_index_end = x_max
         tick_values.append(x_mid)
-        tick_labels.append(data[(data["Driver"] == driver)]["Tla"].iloc[0])
+        tick_labels.append(data[(data["DriverTeam"] == driver_team)]["Tla"].iloc[0])
         
         fig.add_vrect(
             x0=x_min,
             x1=x_max,
-            fillcolor="#" + data[(data["Driver"] == driver)]["TeamColour"].iloc[0],
+            fillcolor="#" + data[(data["DriverTeam"] == driver_team)]["TeamColour"].iloc[0],
             layer="below",
             opacity=1,
             line_width=0.5,
