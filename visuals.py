@@ -278,6 +278,8 @@ def build_lap_plot(data_dict, filters, client_info):
     }
 
     def colour_opacity(compound, lap_id):
+        if compound not in compound_colour:
+            compound = "Unknown"
         colour = compound_colour[compound]
         if filter_exists(filters, "LapId") and lap_id not in filter_values(filters, "LapId"):
             colour = colour.replace("1)", "0.25)")
