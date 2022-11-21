@@ -57,20 +57,22 @@ def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False)
         session_frame["SessionOrder"] = i
         session_frames.append(session_frame)
 
-    sessions = pd.concat(session_frames)
-    sessions["id"] = 0
-    sessions.sort_values("SessionDate", inplace=True)
+    # If there are any sessions to load, load them, otherwise return from function
+    if len(session_frames) > 0:
+        sessions = pd.concat(session_frames)
+        sessions["id"] = 0
+        sessions.sort_values("SessionDate", inplace=True)
 
-    # Assign session id
-    for i in range(0, len(sessions)):
-        sessions["id"].iloc[i] = new_session_id
-        new_session_id += 1
+        # Assign session id
+        for i in range(0, len(sessions)):
+            sessions["id"].iloc[i] = new_session_id
+            new_session_id += 1
 
-    # Load to SQL
-    data_logging(pyodbc_connection, f"Loading {len(events)} records to Event")
-    events.to_sql("Event", sqlalchemy_engine, if_exists="append", index=False)
-    data_logging(pyodbc_connection, f"Loading {len(sessions)} records to Session")
-    sessions.to_sql("Session", sqlalchemy_engine, if_exists="append", index=False)
+        # Load to SQL
+        data_logging(pyodbc_connection, f"Loading {len(events)} records to Event")
+        events.to_sql("Event", sqlalchemy_engine, if_exists="append", index=False)
+        data_logging(pyodbc_connection, f"Loading {len(sessions)} records to Session")
+        sessions.to_sql("Session", sqlalchemy_engine, if_exists="append", index=False)
 
 
 def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, force_sessionId=None, force_reload=False):
