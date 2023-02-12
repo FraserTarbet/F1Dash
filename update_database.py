@@ -163,7 +163,7 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
             weather_data = ff.api.weather_data(session["api_string"])
         except ff.api.SessionNotAvailableError:
             data_logging(pyodbc_connection, f"Session weather data unavailable: {session['api_string']}")
-            abort = True
+            # Missing weather data does not cause abort; seems to be missing from preseason data
 
         if abort:
             # Update aborted load count and add to log, continue to next loop iteration
@@ -244,8 +244,11 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
         driver_info["SessionId"] = session["SessionId"]
 
         # Weather data
-        weather_data = pd.DataFrame(weather_data)
-        weather_data["SessionId"] = session["SessionId"]
+        try:
+            weather_data = pd.DataFrame(weather_data)
+            weather_data["SessionId"] = session["SessionId"]
+        except NameError:
+            weather_data = pd.DataFrame()
 
 
         # Compare row counts to SQL
@@ -280,6 +283,8 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
                 (driver_info, "DriverInfo"),
                 (weather_data, "WeatherData")
             ]:
+                if len(dataset[0]) == 0: continue
+                
                 data_logging(pyodbc_connection, f"Loading {len(dataset[0])} records to {dataset[1]}")
                 chunk_ranges = []
                 chunk_size = 100000

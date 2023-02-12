@@ -1059,7 +1059,9 @@ def build_conditions_plot(data_dict, client_info):
 
     # Hover labels
     for metric in metrics:
-        data["text_" + metric] = data[metric].apply(lambda x: str(x) + metrics[metric]["text_suffix"])
+        data["text_" + metric] = data[metric].apply(
+            lambda x: str(x) + metrics[metric]["text_suffix"] if x is not None else "Unavailable"
+        )
 
     # Traces
     y_values = []
