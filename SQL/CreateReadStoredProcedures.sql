@@ -248,6 +248,58 @@ BEGIN
 	*/
 
 	DECLARE @ActivityTimeRange FLOAT = 60 * CAST(1000000000 AS FLOAT) -- 1 minute either side of weather sample
+		,@WeatherExists BIT = (
+			SELECT CASE 
+				WHEN COUNT(W.id) > 0 THEN 1
+				ELSE 0
+			END
+
+			FROM dbo.Session AS S
+
+			INNER JOIN dbo.WeatherData AS W
+			ON S.id = W.SessionId
+
+			WHERE EventId = @EventId
+			AND (
+				SessionName = @SessionName
+				OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+			)
+		)
+		,@FirstCleanLapTime FLOAT
+		,@LastCleanLapTime FLOAT
+		,@i FLOAT
+
+
+	SELECT @FirstCleanLapTime = MIN(TimeStart + SO.SessionTimeOffset)
+		,@LastCleanLapTime = MAX(TimeEnd + SO.SessionTimeOffset)
+
+	FROM dbo.Session AS S
+
+	INNER JOIN dbo.MergedLapData AS L
+	ON S.id = L.SessionId
+
+	INNER JOIN dbo.SessionOffsets(@EventId, @SessionName) AS SO
+	ON S.id = SO.SessionId
+
+	WHERE EventId = @EventId
+	AND (
+		SessionName = @SessionName
+		OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
+	)
+	AND L.CleanLap = 1
+
+
+	-- If no weather data, need to create a dummy time dimension of minute intervals
+	CREATE TABLE #DummyTimes (SessionTime FLOAT)
+	IF @WeatherExists = 0
+	BEGIN
+		SET @i = @FirstCleanLapTime
+		WHILE @i <= @LastCleanLapTime
+		BEGIN
+			INSERT INTO #DummyTimes VALUES(@i)
+			SET @i = @i + @ActivityTimeRange
+		END
+	END
 
 
 	;WITH Weather AS (
@@ -276,6 +328,19 @@ BEGIN
 			SessionName = @SessionName
 			OR LEFT(SessionName, 8) = 'Practice' AND @SessionName = 'Practice (all)'
 		)
+
+		UNION ALL
+		SELECT NULL AS SessionId
+			,SessionTime
+			,NULL AS AirTemp
+			,NULL AS Humidity
+			,NULL AS Pressure
+			,NULL AS Rainfall
+			,NULL AS TrackTemp
+			,NULL AS WindDirection
+			,NULL AS WindSpeed
+
+		FROM #DummyTimes
 	)
 	, Track AS (
 		SELECT S.id AS SessionId
@@ -314,6 +379,7 @@ BEGIN
 
 		LEFT JOIN Track AS T
 		ON W.SessionTime >= T.SessionTime
+
 	)
 	,StatusStart AS (
 		SELECT *
@@ -385,6 +451,9 @@ BEGIN
 		,T.TrackStatus
 
 	ORDER BY T.WeatherTime ASC
+
+
+	DROP TABLE #DummyTimes
 
 END
 GO
