@@ -51,7 +51,7 @@ def refresh_schedule(pyodbc_connection, sqlalchemy_engine, reload_history=False)
     # Unpivot session data
     session_frames = []
     for i in range(1, 6):
-        session_frame = schedule[["id", "Session" + str(i), "Session" + str(i) + "Date"]][(~schedule["Session" + str(i)].isnull())]
+        session_frame = schedule[["id", "Session" + str(i), "Session" + str(i) + "Date"]][(~schedule["Session" + str(i)].isnull())  & (~schedule["Session" + str(i) + "Date"].isnull())]
         if len(session_frame) == 0: continue
         session_frame.rename(columns={"id": "EventId", "Session" + str(i): "SessionName", "Session" + str(i) + "Date": "SessionDate"}, inplace=True)
         session_frame["SessionOrder"] = i
