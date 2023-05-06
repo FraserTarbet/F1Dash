@@ -1,5 +1,7 @@
 # F1Dash
 
+*Formula One timing and telemetry*
+
 ## Table of Contents
 
 - [What is F1dash](https://github.com/FraserTarbet/F1Dash#what-is-f1dash)
