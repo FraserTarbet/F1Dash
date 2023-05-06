@@ -4,11 +4,11 @@
 
 ## Table of Contents
 
-- [What is F1dash](https://github.com/FraserTarbet/F1Dash#what-is-f1dash)
-- [In brief (why I started)](https://github.com/FraserTarbet/F1Dash#in-brief)
-- [In detail (why I started)](https://github.com/FraserTarbet/F1Dash#in-detail)
-- [Caveats](https://github.com/FraserTarbet/F1Dash#caveats)
-- [Future plans](https://github.com/FraserTarbet/F1Dash#future-plans)
+- [What is F1dash](#what-is-f1dash)
+- [In brief (why I started)](#in-brief)
+- [In detail (why I started)](#in-detail)
+- [Caveats](#caveats)
+- [Future plans](#future-plans)
 
 ## What Is F1dash
 **F1Dash is an interactive dashboard based on Formula One timing and telemetry data.** Its principal aim is to provide an overview of which drivers/teams are fast during a given session, whilst allowing the user to probe the data and explore the differences in performance between drivers, right down to individual sections of track.
