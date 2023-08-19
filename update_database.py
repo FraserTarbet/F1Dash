@@ -165,6 +165,21 @@ def load_session_data(pyodbc_connection, sqlalchemy_engine, force_eventId=None, 
             data_logging(pyodbc_connection, f"Session weather data unavailable: {session['api_string']}")
             # Missing weather data does not cause abort; seems to be missing from preseason data
 
+        # Check for any zero-length data returned from API (e.g. Hungary 2023 P1 drivers)
+        if not abort:
+            for dataset in [
+                (lap_data, "lap data"),
+                (timing_data, "timing data"),
+                (car_data, "car data"),
+                (position_data, "position data"),
+                (track_status, "track status"),
+                (session_status, "session status"),
+                (driver_info, "driver info")
+            ]:
+                if len(dataset[0]) == 0:
+                    data_logging(pyodbc_connection, f"Zero-length result for {dataset[1]}: {session['api_string']}")
+                    abort = True
+
         if abort:
             # Update aborted load count and add to log, continue to next loop iteration
             cursor.execute("EXEC dbo.Update_IncrementAbortedLoadCount @SessionId=?", int(session["SessionId"]))
