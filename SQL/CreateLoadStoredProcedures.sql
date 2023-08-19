@@ -123,6 +123,16 @@ GO
 CREATE PROCEDURE dbo.Get_SessionsToTransform @ForceEventId INT = NULL, @ForceSessionId INT = NULL
 AS
 BEGIN
+
+	DECLARE @SinceDate DATETIME = (
+		SELECT CAST([Value] + ' 00:00:00' AS DATETIME)
+
+		FROM dbo.Config_App
+
+		WHERE Parameter = 'OldestDateToLoad'
+	)
+
+
 	SELECT S.id AS SessionId
 		,EventId
 		,EventName
@@ -141,6 +151,7 @@ BEGIN
 		AND TransformStatus IS NULL -- Won't try to run on previously failed loads (0)
 		AND LoadStatus = 1 -- Only transform once session is fully loaded
 		AND F1ApiSupport = 1
+		AND SessionDate >= @SinceDate
 	)
 	OR (
 		E.id = @ForceEventId
